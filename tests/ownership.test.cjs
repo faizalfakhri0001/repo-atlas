@@ -4,6 +4,7 @@ const {
   aggregateDirectoryOwnership,
   aggregateFileOwnership,
   aggregateOwnershipByPeriod,
+  buildOwnershipReport,
   calculateOwnershipMetrics,
   contributorKey,
   normalizeOwnershipPeriod,
@@ -108,4 +109,23 @@ test("aggregateOwnershipByPeriod keeps all-time and last twelve months data sepa
   assert.equal(recent.totalCommits, 1);
   assert.equal(recent.totalChurn, 6);
   assert.deepEqual([...recent.contributors.keys()], ["email:new@example.test"]);
+});
+
+test("buildOwnershipReport returns bounded directory children and a repository summary", () => {
+  const report = buildOwnershipReport({
+    repositoryKey: "/workspace/repository",
+    head: "a".repeat(40),
+    scope: { processedCommits: 4, truncated: false },
+    files: new Map([
+      ["src/components/a.jsx", { path: "src/components/a.jsx", commits: 2, additions: 5, deletions: 1, authors: new Map([["email:ada@example.test", { name: "Ada", email: "ada@example.test", commits: 2, additions: 5, deletions: 1 }]]) }],
+      ["src/index.js", { path: "src/index.js", commits: 1, additions: 3, deletions: 0, authors: new Map([["email:grace@example.test", { name: "Grace", email: "grace@example.test", commits: 1, additions: 3, deletions: 0 }]]) }],
+    ]),
+  }, { path: "src", limit: 10 });
+
+  assert.equal(report.path, "src");
+  assert.equal(report.summary.name, "Repository");
+  assert.deepEqual(report.nodes.map((node) => [node.type, node.path]), [["directory", "src/components"], ["file", "src/index.js"]]);
+  assert.equal(report.nodes[0].primaryContributor.name, "Ada");
+  assert.equal(report.scope.totalFiles, 2);
+  assert.equal(report.scope.returnedNodes, 2);
 });

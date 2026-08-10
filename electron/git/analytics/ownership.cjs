@@ -138,7 +138,8 @@ function createDirectoryOwnership(directoryPath) {
 
 function directoryAncestors(filePath) {
   const ancestors = [];
-  let directory = filePath.slice(0, filePath.lastIndexOf("/"));
+  const separator = filePath.lastIndexOf("/");
+  let directory = separator < 0 ? "" : filePath.slice(0, separator);
   while (true) {
     ancestors.push(directory);
     if (!directory) break;
@@ -268,6 +269,118 @@ function aggregateOwnershipByPeriod(index, { period = "all", now = Date.now() } 
   return normalizeOwnershipPeriod(period) === "12m" ? aggregateRecentFileOwnership(index, { now }) : aggregateFileOwnership(index);
 }
 
+function ownershipParentPath(filePath) {
+  const separator = filePath.lastIndexOf("/");
+  return separator < 0 ? "" : filePath.slice(0, separator);
+}
+
+function ownershipNodeName(node) {
+  if (!node.path) return "Repository";
+  return node.path.split("/").pop() || node.path;
+}
+
+function buildOwnershipData(index, options = {}) {
+  const period = normalizeOwnershipPeriod(options.period);
+  const files = aggregateOwnershipByPeriod(index, { period, now: options.now ?? Date.now() });
+  const directories = aggregateDirectoryOwnership(files);
+  if (!directories.has("")) directories.set("", createDirectoryOwnership(""));
+  const scoredFiles = new Map([...files].map(([path, file]) => [path, calculateOwnershipMetrics(file)]));
+  const scoredDirectories = new Map([...directories].map(([path, directory]) => [path, calculateOwnershipMetrics(directory)]));
+  return { period, files: scoredFiles, directories: scoredDirectories, root: scoredDirectories.get("") };
+}
+
+function ownershipChildren(data, parentPath) {
+  const directories = [...data.directories.values()]
+    .filter((node) => node.path && ownershipParentPath(node.path) === parentPath)
+    .map((node) => ({ ...node, name: ownershipNodeName(node) }));
+  const files = [...data.files.values()]
+    .filter((node) => ownershipParentPath(node.path) === parentPath)
+    .map((node) => ({ ...node, name: ownershipNodeName(node), fileCount: 1 }));
+  return [...directories, ...files].sort((left, right) => (left.type === right.type ? left.path.localeCompare(right.path) : left.type === "directory" ? -1 : 1));
+}
+
+function serializeOwnershipContributor(contributor) {
+  if (!contributor) return null;
+  return {
+    key: contributor.key,
+    name: contributor.name,
+    email: contributor.email,
+    aliases: contributor.aliases instanceof Set ? [...contributor.aliases] : contributor.aliases ?? [],
+    commits: contributor.commits,
+    additions: contributor.additions,
+    deletions: contributor.deletions,
+    churn: contributor.churn,
+    recentActivity: contributor.recentActivity ?? 0,
+    lastChangedAt: contributor.lastChangedAt,
+    commitShare: contributor.commitShare,
+    churnShare: contributor.churnShare,
+    ownershipScore: contributor.ownershipScore,
+  };
+}
+
+function serializeOwnershipNode(node) {
+  return {
+    path: node.path,
+    name: node.name ?? ownershipNodeName(node),
+    type: node.type,
+    totalCommits: node.totalCommits,
+    totalChurn: node.totalChurn,
+    additions: node.additions,
+    deletions: node.deletions,
+    fileCount: node.fileCount ?? (node.type === "file" ? 1 : 0),
+    firstSeenAt: node.firstSeenAt,
+    lastChangedAt: node.lastChangedAt,
+    primaryContributor: serializeOwnershipContributor(node.primaryContributor),
+    topContributors: (node.topContributors ?? []).map(serializeOwnershipContributor),
+    top1Share: node.top1Share,
+    top2Share: node.top2Share,
+    concentration: node.concentration,
+    concentrationLabel: node.concentrationLabel,
+  };
+}
+
+function buildOwnershipReport(index, options = {}) {
+  const period = normalizeOwnershipPeriod(options.period);
+  const path = normalizeOwnershipPath(options.path);
+  const limit = normalizeOwnershipLimit(options.limit);
+  const data = buildOwnershipData(index, { period, now: options.now ?? Date.now() });
+  const selectedFile = data.files.get(path);
+  const selectedDirectory = data.directories.get(path);
+  const rawNodes = selectedFile
+    ? [selectedFile]
+    : selectedDirectory
+      ? ownershipChildren(data, path)
+      : path
+        ? []
+        : ownershipChildren(data, "");
+  const nodes = rawNodes.slice(0, limit).map(serializeOwnershipNode);
+  const reportTruncated = rawNodes.length > nodes.length;
+  const sourceScope = index?.scope ?? {};
+
+  return {
+    repositoryKey: index?.repositoryKey ?? "",
+    head: index?.head ?? "",
+    generatedAt: index?.generatedAt ?? new Date().toISOString(),
+    period,
+    path,
+    summary: serializeOwnershipNode(data.root),
+    nodes,
+    scope: {
+      ...sourceScope,
+      period,
+      path,
+      sourceTruncated: Boolean(sourceScope.truncated),
+      totalFiles: data.files.size,
+      totalDirectories: data.directories.size,
+      totalNodes: rawNodes.length,
+      returnedNodes: nodes.length,
+      reportLimit: limit,
+      reportTruncated,
+      truncated: Boolean(sourceScope.truncated || reportTruncated),
+    },
+  };
+}
+
 module.exports = {
   DEFAULT_OWNERSHIP_LIMIT,
   DAY_IN_MILLISECONDS,
@@ -278,6 +391,8 @@ module.exports = {
   aggregateOwnershipByPeriod,
   aggregateRecentFileOwnership,
   aggregateDirectoryOwnership,
+  buildOwnershipData,
+  buildOwnershipReport,
   calculateOwnershipMetrics,
   concentrationLabel,
   compareContributors,
@@ -293,6 +408,11 @@ module.exports = {
   normalizeOwnershipLimit,
   normalizeOwnershipPath,
   normalizeOwnershipPeriod,
+  ownershipChildren,
+  ownershipNodeName,
+  ownershipParentPath,
   ownershipPeriodStart,
+  serializeOwnershipContributor,
+  serializeOwnershipNode,
   timestampOf,
 };

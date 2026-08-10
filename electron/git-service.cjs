@@ -18,6 +18,7 @@ const { readFileAtRevision } = require("./git/revisions.cjs");
 const { searchRepository } = require("./git/search.cjs");
 const { getAnalyticsIndex, serializeAnalyticsIndex } = require("./git/analytics/index.cjs");
 const { buildHotspotReport } = require("./git/analytics/hotspots.cjs");
+const { buildOwnershipReport } = require("./git/analytics/ownership.cjs");
 const { parseBranchRows, resolveDefaultBranch, branchIntelligence } = require("./git/analytics/branches.cjs");
 
 const DEFAULT_COMMIT_LIMIT = 1000;
@@ -556,6 +557,11 @@ async function hotspotSummary(repositoryPath, options = {}) {
   return buildHotspotReport(index, options);
 }
 
+async function ownershipSummary(repositoryPath, options = {}) {
+  const index = await getAnalyticsIndex(repositoryPath, options);
+  return buildOwnershipReport(index, options);
+}
+
 function parseMergeTreeConflicts(result) {
   if (result.code === 0) {
     return { status: "clean", files: [] };
@@ -984,6 +990,7 @@ module.exports = {
   getFileDiff,
   analyticsSummary,
   hotspotSummary,
+  ownershipSummary,
   branchIntelligence,
   compareRefs,
   cherryPickPreview,

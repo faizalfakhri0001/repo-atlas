@@ -428,6 +428,196 @@ function createDemoHotspotSummary(commits, mainTip, options = {}) {
   };
 }
 
+function demoOwnershipNode(filePath, type = "file") {
+  return {
+    path: filePath,
+    type,
+    totalCommits: 0,
+    totalChurn: 0,
+    additions: 0,
+    deletions: 0,
+    firstSeenAt: null,
+    lastChangedAt: null,
+    fileCount: type === "file" ? 1 : 0,
+    contributors: new Map(),
+  };
+}
+
+function demoOwnershipAuthor(commit) {
+  const name = String(commit.author ?? "").trim() || "Unknown author";
+  const email = String(commit.email ?? "").trim().toLowerCase();
+  return { key: email ? `email:${email}` : `name:${name.toLowerCase()}`, name, email };
+}
+
+function addDemoOwnershipActivity(node, author, additions, deletions, date) {
+  const existing = node.contributors.get(author.key) ?? { ...author, commits: 0, additions: 0, deletions: 0, churn: 0, lastChangedAt: null, recentActivity: 0 };
+  existing.commits += 1;
+  existing.additions += additions;
+  existing.deletions += deletions;
+  existing.churn += additions + deletions;
+  existing.lastChangedAt = !existing.lastChangedAt || date > existing.lastChangedAt ? date : existing.lastChangedAt;
+  node.contributors.set(author.key, existing);
+}
+
+function mergeDemoOwnershipNode(target, source) {
+  target.totalCommits += source.totalCommits;
+  target.totalChurn += source.totalChurn;
+  target.additions += source.additions;
+  target.deletions += source.deletions;
+  target.fileCount += source.type === "file" ? 1 : source.fileCount;
+  target.firstSeenAt = !target.firstSeenAt || (source.firstSeenAt && source.firstSeenAt < target.firstSeenAt) ? source.firstSeenAt : target.firstSeenAt;
+  target.lastChangedAt = !target.lastChangedAt || source.lastChangedAt > target.lastChangedAt ? source.lastChangedAt : target.lastChangedAt;
+  for (const contributor of source.contributors.values()) {
+    const existing = target.contributors.get(contributor.key) ?? { ...contributor, commits: 0, additions: 0, deletions: 0, churn: 0 };
+    existing.commits += contributor.commits;
+    existing.additions += contributor.additions;
+    existing.deletions += contributor.deletions;
+    existing.churn += contributor.churn;
+    existing.lastChangedAt = !existing.lastChangedAt || contributor.lastChangedAt > existing.lastChangedAt ? contributor.lastChangedAt : existing.lastChangedAt;
+    target.contributors.set(contributor.key, existing);
+  }
+}
+
+function demoOwnershipAncestors(filePath) {
+  const result = [];
+  const separator = filePath.lastIndexOf("/");
+  let directory = separator < 0 ? "" : filePath.slice(0, separator);
+  while (true) {
+    result.push(directory);
+    if (!directory) break;
+    const separator = directory.lastIndexOf("/");
+    directory = separator < 0 ? "" : directory.slice(0, separator);
+  }
+  return result;
+}
+
+function demoOwnershipParentPath(filePath) {
+  const separator = filePath.lastIndexOf("/");
+  return separator < 0 ? "" : filePath.slice(0, separator);
+}
+
+function scoreDemoOwnershipNode(node) {
+  const totalCommits = node.totalCommits;
+  const totalChurn = node.totalChurn;
+  const contributors = [...node.contributors.values()].map((contributor) => {
+    const commitShare = totalCommits > 0 ? contributor.commits / totalCommits : 0;
+    const churnShare = totalChurn > 0 ? contributor.churn / totalChurn : 0;
+    return {
+      ...contributor,
+      aliases: contributor.name ? [contributor.name] : [],
+      commitShare,
+      churnShare,
+      ownershipScore: totalChurn > 0 ? 0.4 * commitShare + 0.6 * churnShare : commitShare,
+    };
+  }).sort((left, right) => right.ownershipScore - left.ownershipScore || right.churn - left.churn || left.name.localeCompare(right.name));
+  const top1Share = contributors[0]?.ownershipScore ?? 0;
+  const top2Share = contributors.slice(0, 2).reduce((sum, contributor) => sum + contributor.ownershipScore, 0);
+  return {
+    ...node,
+    name: node.path ? node.path.split("/").pop() : "Repository",
+    primaryContributor: contributors[0] ?? null,
+    topContributors: contributors.slice(0, 10),
+    top1Share,
+    top2Share,
+    concentration: top1Share,
+    concentrationLabel: top1Share >= 0.8 ? "Highly concentrated" : top1Share >= 0.6 ? "Moderately concentrated" : "Distributed",
+  };
+}
+
+function serializeDemoOwnershipNode(node) {
+  return {
+    path: node.path,
+    name: node.name,
+    type: node.type,
+    totalCommits: node.totalCommits,
+    totalChurn: node.totalChurn,
+    additions: node.additions,
+    deletions: node.deletions,
+    fileCount: node.fileCount,
+    firstSeenAt: node.firstSeenAt,
+    lastChangedAt: node.lastChangedAt,
+    primaryContributor: node.primaryContributor,
+    topContributors: node.topContributors,
+    top1Share: node.top1Share,
+    top2Share: node.top2Share,
+    concentration: node.concentration,
+    concentrationLabel: node.concentrationLabel,
+  };
+}
+
+function createDemoOwnershipSummary(commits, mainTip, options = {}) {
+  const period = options.period === "12m" ? "12m" : "all";
+  const maxCommits = Math.min(50_000, Math.max(1, Math.floor(Number(options.maxCommits) || 10_000)));
+  const selected = commits.slice(0, maxCommits);
+  const nowTimestamp = Date.parse(options.now ?? "") || Date.now();
+  const periodStart = period === "12m" ? nowTimestamp - 365 * 24 * 60 * 60 * 1000 : -Infinity;
+  const files = new Map();
+  for (const commit of selected) {
+    if (periodStart !== -Infinity && (Date.parse(commit.date) || 0) < periodStart) continue;
+    const author = demoOwnershipAuthor(commit);
+    for (const change of filesForCommit(commit)) {
+      const file = files.get(change.path) ?? demoOwnershipNode(change.path);
+      const additions = Number(change.additions) || 0;
+      const deletions = Number(change.deletions) || 0;
+      file.totalCommits += 1;
+      file.totalChurn += additions + deletions;
+      file.additions += additions;
+      file.deletions += deletions;
+      file.firstSeenAt = !file.firstSeenAt || commit.date < file.firstSeenAt ? commit.date : file.firstSeenAt;
+      file.lastChangedAt = !file.lastChangedAt || commit.date > file.lastChangedAt ? commit.date : file.lastChangedAt;
+      addDemoOwnershipActivity(file, author, additions, deletions, commit.date);
+      files.set(change.path, file);
+    }
+  }
+  const directories = new Map();
+  for (const file of files.values()) {
+    for (const directoryPath of demoOwnershipAncestors(file.path)) {
+      const directory = directories.get(directoryPath) ?? demoOwnershipNode(directoryPath, "directory");
+      mergeDemoOwnershipNode(directory, file);
+      directories.set(directoryPath, directory);
+    }
+  }
+  const scoredFiles = new Map([...files].map(([path, file]) => [path, scoreDemoOwnershipNode(file)]));
+  const scoredDirectories = new Map([...directories].map(([path, directory]) => [path, scoreDemoOwnershipNode(directory)]));
+  if (!scoredDirectories.has("")) scoredDirectories.set("", scoreDemoOwnershipNode(demoOwnershipNode("", "directory")));
+  const path = String(options.path ?? "").trim().replace(/\/+$/, "");
+  const selectedFile = scoredFiles.get(path);
+  const selectedDirectory = scoredDirectories.get(path);
+  const children = selectedFile
+    ? [selectedFile]
+    : selectedDirectory
+      ? [...scoredDirectories.values()].filter((node) => node.path && demoOwnershipParentPath(node.path) === path).concat([...scoredFiles.values()].filter((node) => demoOwnershipParentPath(node.path) === path))
+      : path
+        ? []
+        : [...scoredDirectories.values()].filter((node) => node.path && !node.path.includes("/")).concat([...scoredFiles.values()].filter((node) => !node.path.includes("/")));
+  const sortedChildren = children.sort((left, right) => left.type === right.type ? left.path.localeCompare(right.path) : left.type === "directory" ? -1 : 1);
+  const limit = Math.min(1000, Math.max(1, Math.floor(Number(options.limit) || 100)));
+  const returned = sortedChildren.slice(0, limit).map(serializeDemoOwnershipNode);
+  const truncated = selected.length < commits.length || sortedChildren.length > returned.length;
+  return {
+    repositoryKey: "/demo/acme-storefront",
+    head: mainTip,
+    generatedAt: new Date(nowTimestamp).toISOString(),
+    period,
+    path,
+    summary: serializeDemoOwnershipNode(scoredDirectories.get("")),
+    nodes: returned,
+    scope: {
+      maxCommits,
+      maxFilesPerCommit: 5_000,
+      processedCommits: selected.length,
+      sourceTruncated: commits.length > maxCommits,
+      totalFiles: scoredFiles.size,
+      totalDirectories: scoredDirectories.size,
+      totalNodes: sortedChildren.length,
+      returnedNodes: returned.length,
+      reportLimit: limit,
+      reportTruncated: sortedChildren.length > returned.length,
+      truncated,
+    },
+  };
+}
+
 export function createDemoApi() {
   const dataset = buildDataset();
   const { commits, byHash, branchTips, tags } = dataset;
@@ -773,6 +963,7 @@ export function createDemoApi() {
     scanRepository: () => ok(scanData()),
     analyticsSummary: (payload = {}) => ok(createDemoAnalyticsSummary(commits, mainTip, payload)),
     hotspots: (payload = {}) => ok(createDemoHotspotSummary(commits, mainTip, payload)),
+    ownership: (payload = {}) => ok(createDemoOwnershipSummary(commits, mainTip, payload)),
     branchIntelligence: (payload = {}) => ok(createDemoBranchIntelligence(payload)),
     repositorySearch: (payload) => ok(searchDemoRepository(payload)),
     listRepositoryFiles: () => ok(demoFiles),
