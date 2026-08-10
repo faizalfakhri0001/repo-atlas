@@ -9,6 +9,7 @@ function App() {
   const data = activeSession?.snapshot ?? null;
   const [theme, setTheme] = useState(() => localStorage.getItem("repo-atlas-theme") || "dark");
   const initialized = useRef(false);
+  const quickFileRequest = useRef(0);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -110,6 +111,13 @@ function App() {
 
   const showWorkspace = useCallback(() => actions.setActiveView("workspace"), [actions]);
 
+  const quickOpenFile = useCallback(() => {
+    if (!activeSession?.snapshot) return;
+    quickFileRequest.current += 1;
+    actions.setActiveView("files");
+    actions.requestFileFilter(quickFileRequest.current);
+  }, [actions, activeSession?.snapshot]);
+
   const openRecentRepository = useCallback(
     (repositoryPath) => (repositoryPath ? loadRepository(repositoryPath) : handleOpen()),
     [handleOpen, loadRepository],
@@ -151,6 +159,7 @@ function App() {
       onShowBranchInGraph={showBranchInGraph}
       onFocusCommit={focusCommitInGraph}
       onShowWorkspace={showWorkspace}
+      onQuickOpenFile={quickOpenFile}
       onFileHistoryChange={(sessionId, value) => actions.setFileHistory(value, sessionId)}
       onClearCherryPick={() => actions.setCherryPick(null)}
       onActivateRepository={activateRepository}

@@ -39,6 +39,15 @@ import { WorkspaceView } from "@/features/workspace";
 import { FileExplorer } from "@/features/files";
 import { CherryPickDialog } from "@/components/cherry-pick-dialog";
 import { StateBanner } from "@/features/repository";
+import {
+  CommandPalette,
+  createCommandRegistry,
+  createFileCommands,
+  createNavigationCommands,
+  createRepositoryCommands,
+  useCommandPalette,
+  useCommandPaletteShortcuts,
+} from "@/features/command-palette";
 import { cn, formatRelativeDate, truncateMiddle } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -67,6 +76,7 @@ export function AppShell({
   onShowBranchInGraph,
   onFocusCommit,
   onShowWorkspace,
+  onQuickOpenFile,
   onFileHistoryChange,
   onClearCherryPick,
   onActivateRepository,
@@ -82,10 +92,47 @@ export function AppShell({
   const data = session?.snapshot ?? null;
   const loading = session?.loading ?? false;
   const error = session?.error ?? null;
+  const activeView = session?.activeView;
   const cherryPick = session?.ui.cherryPick ?? null;
   const selectedSessionId = activeSessionId ?? session?.id;
-  const workspaceSessions = sessions.length > 0 ? sessions : session ? [session] : [];
+  const workspaceSessions = useMemo(() => (sessions.length > 0 ? sessions : session ? [session] : []), [session, sessions]);
   const loadedSessions = workspaceSessions.filter((candidate) => candidate.snapshot);
+
+  const commandContext = useMemo(
+    () => ({
+      activeRepository: data?.repository ?? null,
+      activeSession: session ?? null,
+      activeView,
+      sessions: workspaceSessions,
+      recentRepositories,
+      isDemo,
+      navigate: onNavigate,
+      openRepository: onOpen,
+      refreshRepository: onRefresh,
+      revealRepository: (repositoryPath) => api.revealRepository(repositoryPath),
+      closeRepository: onCloseRepository,
+      switchRepository: onActivateRepository,
+      openRecentRepository: onOpenRecent,
+      quickOpenFile: onQuickOpenFile,
+    }),
+    [activeView, data?.repository, isDemo, onActivateRepository, onCloseRepository, onNavigate, onOpen, onOpenRecent, onQuickOpenFile, onRefresh, recentRepositories, session, workspaceSessions],
+  );
+  const commandList = useMemo(
+    () => createCommandRegistry([
+      ...createNavigationCommands(),
+      ...createRepositoryCommands(commandContext),
+      ...createFileCommands(),
+    ]),
+    [commandContext],
+  );
+  const palette = useCommandPalette({ commands: commandList, context: commandContext });
+  useCommandPaletteShortcuts({
+    commands: commandList,
+    context: commandContext,
+    onOpenPalette: palette.openPalette,
+    onExecute: palette.executeCommand,
+    open: palette.open,
+  });
 
   const counts = useMemo(
     () => ({
@@ -300,7 +347,7 @@ export function AppShell({
           )}
         </main>
 
-        {cherryPick && data && (
+      {cherryPick && data && (
           <CherryPickDialog
             key={cherryPick.nonce}
             repoPath={data.repository.rootPath}
@@ -311,6 +358,19 @@ export function AppShell({
           />
         )}
       </div>
+      <CommandPalette
+        open={palette.open}
+        onOpenChange={palette.handleOpenChange}
+        query={palette.query}
+        onQueryChange={palette.updateQuery}
+        commands={palette.results}
+        selectedIndex={palette.selectedIndex}
+        onSelectedIndexChange={palette.setSelectedIndex}
+        onExecute={palette.executeCommand}
+        isCommandEnabled={palette.isCommandEnabled}
+        executingId={palette.executingId}
+        error={palette.error}
+      />
     </TooltipProvider>
   );
 }
