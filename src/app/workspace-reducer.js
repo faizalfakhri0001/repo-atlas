@@ -219,7 +219,23 @@ export function workspaceReducer(state, action) {
         }));
       }
       nextState = updateSession(nextState, session.id, (current) => ({ ...current, lastActivatedAt: timestamp }));
-      return { ...nextState, activeSessionId: session.id };
+      const activatedSession = findSession(nextState, session.id);
+      const repository = activatedSession?.snapshot?.repository;
+      return {
+        ...nextState,
+        activeSessionId: session.id,
+        recentRepositories: repository
+          ? upsertRecentRepository(
+              nextState.recentRepositories,
+              {
+                path: repository.rootPath ?? activatedSession.path,
+                name: repository.name ?? activatedSession.name,
+                lastKnownBranch: repository.currentBranch,
+              },
+              timestamp,
+            )
+          : nextState.recentRepositories,
+      };
     }
 
     case "SESSION_CLOSE": {

@@ -76,6 +76,7 @@ test("session lifecycle canonicalizes repository roots and prevents duplicate ta
   });
   assert.equal(state.sessions.length, 1);
   assert.equal(state.activeSessionId, "/workspace/repository");
+  assert.equal(state.recentRepositories[0].lastOpenedAt, 3);
 
   state = workspaceReducer(state, {
     type: "SESSION_OPEN_REQUEST",
