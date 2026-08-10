@@ -13,6 +13,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { CopyButton, FilePathLabel, FileStatusBadge } from "@/components/diff-view";
+import { BLAME_HEAT_BUCKETS, getBlameHeatBucket } from "@/features/blame/blame-heatmap";
 
 function lineNumberWidth(lineCount) {
   return `${Math.max(2, String(lineCount).length)}ch`;
@@ -105,20 +106,21 @@ export function BlameView({
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-auto bg-background/40">
-        <div className="sticky top-0 z-10 grid min-w-[760px] grid-cols-[10rem_6rem_7rem_minmax(0,1fr)] border-b border-border bg-background/95 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">
+        <div className="sticky top-0 z-10 grid min-w-[800px] grid-cols-[10rem_8rem_7rem_minmax(0,1fr)] border-b border-border bg-background/95 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">
           <span>Author</span>
           <span>Age</span>
           <span>Commit</span>
           <span>Code</span>
         </div>
-        <div className="min-w-[760px] font-mono text-[12px] leading-5">
+        <div className="min-w-[800px] font-mono text-[12px] leading-5">
           {lines.map((line, index) => {
             const previous = lines[index - 1];
             const showMetadata = !previous || metadataKey(previous) !== metadataKey(line);
+            const heat = getBlameHeatBucket(line.authorTime);
             return (
               <ContextMenu key={`${line.commitHash}-${line.lineNumber}`}>
                 <ContextMenuTrigger asChild>
-                  <div className="grid grid-cols-[10rem_6rem_7rem_minmax(0,1fr)] min-h-5 border-b border-border/20 hover:bg-accent/40" data-blame-line={line.lineNumber}>
+                  <div className={cn("grid grid-cols-[10rem_8rem_7rem_minmax(0,1fr)] min-h-5 border-b border-border/20 hover:bg-accent/40", heat.rowClass)} data-blame-line={line.lineNumber}>
                     <button
                       type="button"
                       className="flex min-w-0 items-center gap-1 border-r border-border/50 px-2 text-left text-[11px] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -127,8 +129,10 @@ export function BlameView({
                     >
                       {showMetadata ? <span className="truncate">{line.author.name || "Unknown author"}</span> : null}
                     </button>
-                    <span className="truncate border-r border-border/50 px-2 text-[11px] text-muted-foreground" title={line.authorTime ? formatDate(line.authorTime) : undefined}>
-                      {showMetadata && line.authorTime ? formatRelativeDate(line.authorTime) : ""}
+                    <span className="flex min-w-0 items-center gap-1.5 truncate border-r border-border/50 px-2 text-[11px] text-muted-foreground" title={line.authorTime ? `${formatDate(line.authorTime)} · ${heat.label}` : heat.label}>
+                      {showMetadata && <span className={cn("size-1.5 shrink-0 rounded-full", heat.dotClass)} aria-hidden="true" />}
+                      {showMetadata && <span className="truncate">{line.authorTime ? formatRelativeDate(line.authorTime) : "Unknown time"}</span>}
+                      {showMetadata && <span className="shrink-0 text-[9px] uppercase tracking-tight text-muted-foreground/70">{heat.shortLabel}</span>}
                     </span>
                     <button
                       type="button"
@@ -155,9 +159,17 @@ export function BlameView({
           })}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
         <span>{state.data?.authors?.length ?? 0} authors</span>
         {state.data?.cached && <Badge variant="muted">cached</Badge>}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1" aria-label="Blame age legend">
+          {BLAME_HEAT_BUCKETS.slice(0, 5).map((bucket) => (
+            <span key={bucket.key} className="inline-flex items-center gap-1" title={bucket.label}>
+              <span className={cn("size-1.5 rounded-full", bucket.dotClass)} aria-hidden="true" />
+              <span>{bucket.shortLabel}</span>
+            </span>
+          ))}
+        </div>
         <span className="ml-auto">Click a commit or line gutter for details.</span>
       </div>
     </div>
