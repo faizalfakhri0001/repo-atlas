@@ -13,7 +13,7 @@ const LANGUAGE_KEYWORDS = {
   go: new Set(["chan", "defer", "go", "goroutine", "interface", "map", "package", "range", "select", "struct", "type", "var"]),
   java: new Set(["boolean", "byte", "class", "double", "extends", "final", "float", "implements", "import", "instanceof", "int", "interface", "long", "new", "package", "private", "protected", "public", "return", "static", "super", "this", "throw", "throws", "try", "void"]),
   python: new Set(["and", "as", "assert", "async", "await", "class", "def", "elif", "else", "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield"]),
-  rust: new Set(["as", "async", "await", "const", "crate", "dyn", "enum", "fn", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self", " Self", "struct", "trait", "type", "unsafe", "use", "where", "while"]),
+  rust: new Set(["as", "async", "await", "const", "crate", "dyn", "enum", "fn", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "struct", "trait", "type", "unsafe", "use", "where", "while"]),
 };
 
 const TOKEN_CLASS = {
