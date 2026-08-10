@@ -22,7 +22,7 @@ test("repository search finds files, refs, commits, authors, and hashes", async 
   await git("add", ".");
   await git("commit", "-m", "Add login flow");
   const firstHash = (await git("rev-parse", "HEAD")).stdout.trim();
-  await git("tag", "v1.0.0");
+  await git("tag", "-a", "v1.0.0", "-m", "Release 1.0.0");
   await git("branch", "feature/login");
 
   await git("config", "user.name", "Grace Hopper");
@@ -40,9 +40,13 @@ test("repository search finds files, refs, commits, authors, and hashes", async 
 
   const tagResults = await searchRepository(root, { query: "type:tag v1.0" });
   assert.ok(tagResults.results.some((result) => result.name === "v1.0.0"));
+  assert.equal(tagResults.results.find((result) => result.name === "v1.0.0").hash, firstHash);
 
   const commitResults = await searchRepository(root, { query: "type:commit session" });
   assert.ok(commitResults.results.some((result) => result.subject === "Improve session handling"));
+
+  const branchCommitResults = await searchRepository(root, { query: "type:commit branch:feature/login" });
+  assert.ok(branchCommitResults.results.some((result) => result.hash === firstHash));
 
   const authorResults = await searchRepository(root, { query: "type:author ada" });
   assert.ok(authorResults.results.some((result) => result.name === "Ada Lovelace"));

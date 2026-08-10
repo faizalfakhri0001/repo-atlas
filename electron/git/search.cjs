@@ -165,7 +165,7 @@ function sortAndLimit(results) {
 
 function parseRefRecords(raw, fields) {
   return String(raw ?? "")
-    .split("\x1e")
+    .split(/\r?\n/)
     .map((record) => record.split("\0").slice(0, fields))
     .filter((record) => record.length === fields && record.some(Boolean));
 }
@@ -190,7 +190,7 @@ async function searchBranches(cwd, query) {
     runGit(cwd, [
       "for-each-ref",
       "--sort=-committerdate",
-      "--format=%(refname)%00%(refname:short)%00%(objectname)%00%(committerdate:iso-strict)%00%(subject)%x1e",
+      "--format=%(refname)%00%(refname:short)%00%(objectname)%00%(committerdate:iso-strict)%00%(subject)",
       "refs/heads",
       "refs/remotes",
     ]),
@@ -218,13 +218,20 @@ async function searchTags(cwd, query) {
   const result = await runGit(cwd, [
     "for-each-ref",
     "--sort=-creatordate",
-    "--format=%(refname:short)%00%(objectname)%00%(creatordate:iso-strict)%00%(subject)%x1e",
+    "--format=%(refname:short)%00%(objectname)%00%(*objectname)%00%(creatordate:iso-strict)%00%(subject)",
     "refs/tags",
   ]);
   const needle = searchValue(query);
   return sortAndLimit(
-    parseRefRecords(result.stdout, 4)
-      .map(([name, hash, date, subject]) => ({ type: "tag", name, hash, date, subject, score: scoreText(name, needle) }))
+    parseRefRecords(result.stdout, 5)
+      .map(([name, objectHash, peeledHash, date, subject]) => ({
+        type: "tag",
+        name,
+        hash: peeledHash || objectHash,
+        date,
+        subject,
+        score: scoreText(name, needle),
+      }))
       .filter((tag) => inDateRange(tag.date, query)),
   );
 }
@@ -241,8 +248,9 @@ function parseCommitRecords(raw) {
     .filter((commit) => HASH_PATTERN.test(commit.hash ?? ""));
 }
 
-function commitArgs(query, limit = 100) {
-  const args = ["log", "--all", "--date=iso-strict", "-n", String(limit)];
+function commitArgs(query, limit = 100, refs = null) {
+  const branchArgs = refs?.length ? refs : ["--all"];
+  const args = ["log", ...branchArgs, "--date=iso-strict", "-n", String(limit)];
   if (query.text) args.push("--regexp-ignore-case", "--fixed-strings", `--grep=${query.text}`);
   if (query.author) args.push("--regexp-ignore-case", `--author=${query.author}`);
   if (query.after) args.push(`--after=${query.after}T00:00:00`);
@@ -252,14 +260,24 @@ function commitArgs(query, limit = 100) {
   return args;
 }
 
+async function resolveBranchRefs(cwd, branch) {
+  const candidates = [`refs/heads/${branch}`, `refs/remotes/${branch}`];
+  const results = await Promise.all(
+    candidates.map((ref) => runGit(cwd, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`], { allowFailure: true })),
+  );
+  return candidates.filter((_ref, index) => !results[index].failed);
+}
+
 async function searchCommits(cwd, query) {
-  const result = await runGit(cwd, commitArgs(query));
-  const needle = searchValue(query);
+  const refs = query.branch ? await resolveBranchRefs(cwd, query.branch) : null;
+  if (query.branch && refs.length === 0) return [];
+  const result = await runGit(cwd, commitArgs(query, 100, refs));
+  const needle = query.text || query.author || "";
   const commits = parseCommitRecords(result.stdout)
     .filter((commit) => inDateRange(commit.date, query))
     .map((commit) => ({
       ...commit,
-      score: Math.max(scoreText(commit.subject, needle), scoreText(commit.hash, needle), scoreText(commit.author, needle)),
+      score: needle ? Math.max(scoreText(commit.subject, needle), scoreText(commit.hash, needle), scoreText(commit.author, needle)) : 1,
     }));
   return sortAndLimit(commits);
 }
