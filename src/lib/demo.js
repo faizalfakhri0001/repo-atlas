@@ -468,9 +468,13 @@ export function createDemoApi() {
       });
     },
     readFileAtRevision: ({ hash, path: filePath } = {}) => {
+      if (typeof hash !== "string" || !hash.trim() || typeof filePath !== "string" || !filePath) {
+        return Promise.resolve({ ok: false, error: { message: "A revision hash and file path are required.", code: "INVALID_ARGUMENT" } });
+      }
       const file = demoFiles.find((entry) => entry.path === filePath);
       const commit = byHash.get(resolveTip(hash));
-      if (!file || !commit) return Promise.resolve({ ok: false, error: { message: "Unknown file revision.", code: "PATH_NOT_FOUND" } });
+      if (!commit) return Promise.resolve({ ok: false, error: { message: "Unknown commit.", code: "UNKNOWN_REF" } });
+      if (!file) return Promise.resolve({ ok: false, error: { message: "Unknown demo file.", code: "PATH_NOT_FOUND" } });
       if (filePath === "assets/logo.bin") {
         return ok({ hash: commit.hash, path: filePath, text: null, binary: true, truncated: false, size: 18_432, language: null });
       }

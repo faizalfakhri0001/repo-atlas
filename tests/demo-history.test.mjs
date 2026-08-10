@@ -24,3 +24,11 @@ test("demo API provides file content at a selected revision", async () => {
   assert.equal(response.data.binary, false);
   assert.match(response.data.text, /Demo content|AppShell|export const ready/);
 });
+
+test("demo API rejects incomplete revision requests", async () => {
+  const api = createDemoApi();
+  const response = await api.readFileAtRevision({ path: "src/app.jsx" });
+
+  assert.equal(response.ok, false);
+  assert.equal(response.error.code, "INVALID_ARGUMENT");
+});
