@@ -92,8 +92,9 @@ function parseDivergenceCounts(raw) {
 function getAgeDays(value, now = Date.now()) {
   if (!value) return null;
   const timestamp = new Date(value).getTime();
-  if (Number.isNaN(timestamp)) return null;
-  return Math.max(0, Math.floor((now - timestamp) / (24 * 60 * 60 * 1000)));
+  const current = typeof now === "number" ? now : new Date(now).getTime();
+  if (Number.isNaN(timestamp) || Number.isNaN(current)) return null;
+  return Math.max(0, Math.floor((current - timestamp) / (24 * 60 * 60 * 1000)));
 }
 
 function getBranchStatus({ current, gone, merged, stale, ahead, behind }) {
