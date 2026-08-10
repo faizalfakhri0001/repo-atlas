@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
-const { cherryPickExecute, cherryPickPreview, sequencerAction } = require("../electron/git-service.cjs");
+const { cherryPickExecute, cherryPickPreview, scanRepository, sequencerAction } = require("../electron/git-service.cjs");
 
 const execFileAsync = promisify(execFile);
 
@@ -53,6 +53,11 @@ test("cherry-pick regression covers preview, apply, conflict, and abort", async 
   const conflicted = await cherryPickExecute(root, [conflictHash]);
   assert.equal(conflicted.status, "conflict");
   assert.deepEqual(conflicted.conflictFiles, ["app.js"]);
+
+  const activeOperation = await scanRepository(root);
+  assert.equal(activeOperation.state.inProgress, true);
+  assert.equal(activeOperation.state.cherryPick, true);
+  assert.deepEqual(activeOperation.status.files.filter((file) => file.conflicted).map((file) => file.path), ["app.js"]);
 
   const aborted = await sequencerAction(root, "abort");
   assert.equal(aborted.status, "applied");
