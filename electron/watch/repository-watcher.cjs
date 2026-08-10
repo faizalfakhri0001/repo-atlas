@@ -1,4 +1,5 @@
 const path = require("node:path");
+const crypto = require("node:crypto");
 const chokidar = require("chokidar");
 const { resolveRepository, runGit } = require("../git/core.cjs");
 const {
@@ -10,6 +11,8 @@ const {
 const DEFAULT_DEBOUNCE_MS = 250;
 const DEFAULT_MAX_WAIT_MS = 1_500;
 const DEFAULT_FILE_THRESHOLD = 50_000;
+const DEFAULT_ACTIVE_POLL_MS = 3_000;
+const DEFAULT_INACTIVE_POLL_MS = 15_000;
 const WATCH_MODES = new Set(["smart", "git-only", "full", "off"]);
 
 function isInside(root, candidate) {
@@ -66,7 +69,32 @@ function resolveWatchStrategy(mode, visibleFileCount, threshold = DEFAULT_FILE_T
   if (requestedMode === "off") return { requestedMode, strategy: "off", watchGit: false, watchWorktree: false, polling: false };
   if (requestedMode === "git-only") return { requestedMode, strategy: "git-only", watchGit: true, watchWorktree: false, polling: false };
   if (requestedMode === "full") return { requestedMode, strategy: "full", watchGit: true, watchWorktree: true, polling: false };
+  if (visibleFileCount == null || visibleFileCount > threshold) {
+    return {
+      requestedMode,
+      strategy: "git-only",
+      watchGit: true,
+      watchWorktree: false,
+      polling: true,
+      fallbackReason: visibleFileCount == null ? "file-count-unavailable" : "large-repository",
+      visibleFileCount,
+      threshold,
+    };
+  }
   return { requestedMode, strategy: "full", watchGit: true, watchWorktree: true, polling: false, visibleFileCount, threshold };
+}
+
+async function readStatusSnapshot(repositoryRoot) {
+  const result = await runGit(repositoryRoot, ["status", "--porcelain=v2", "--branch", "-z"], { allowFailure: true });
+  if (result.failed) throw new Error(result.stderr || "Repository status could not be read.");
+  const records = result.stdout.split(/\0|\n/).filter(Boolean);
+  const branch = records.find((record) => record.startsWith("# branch.head "))?.slice("# branch.head ".length) ?? "";
+  const oid = records.find((record) => record.startsWith("# branch.oid "))?.slice("# branch.oid ".length) ?? "";
+  return {
+    branch,
+    oid,
+    fingerprint: crypto.createHash("sha256").update(result.stdout).digest("hex"),
+  };
 }
 
 class RepositoryWatcher {
@@ -76,30 +104,42 @@ class RepositoryWatcher {
     fileThreshold = DEFAULT_FILE_THRESHOLD,
     debounceMs = DEFAULT_DEBOUNCE_MS,
     maxWaitMs = DEFAULT_MAX_WAIT_MS,
+    activePollMs = DEFAULT_ACTIVE_POLL_MS,
+    inactivePollMs = DEFAULT_INACTIVE_POLL_MS,
     onChange = () => {},
     onError = () => {},
     onStatus = () => {},
     watchFactory = (targets, options) => chokidar.watch(targets, options),
     resolveRepositoryFn = resolveRepository,
     countVisibleFilesFn = countVisibleFiles,
+    pollStatusFn = readStatusSnapshot,
   } = {}) {
     this.repositoryPath = repositoryPath;
     this.mode = normalizeMode(mode);
     this.fileThreshold = fileThreshold;
     this.debounceMs = debounceMs;
     this.maxWaitMs = maxWaitMs;
+    this.activePollMs = activePollMs;
+    this.inactivePollMs = inactivePollMs;
     this.onChange = onChange;
     this.onError = onError;
     this.onStatus = onStatus;
     this.watchFactory = watchFactory;
     this.resolveRepositoryFn = resolveRepositoryFn;
     this.countVisibleFilesFn = countVisibleFilesFn;
+    this.pollStatusFn = pollStatusFn;
     this.repository = null;
     this.strategy = null;
     this.watcher = null;
     this.pendingEvents = [];
     this.debounceTimer = null;
     this.maxWaitTimer = null;
+    this.pollTimer = null;
+    this.pollingEnabled = false;
+    this.pollingInFlight = false;
+    this.pollingSnapshot = null;
+    this.active = true;
+    this.fallbackReason = null;
     this.started = false;
   }
 
@@ -108,6 +148,8 @@ class RepositoryWatcher {
     this.repository = await this.resolveRepositoryFn(this.repositoryPath);
     const visibleFileCount = await this.countVisibleFilesFn(this.repository.rootPath);
     this.strategy = resolveWatchStrategy(this.mode, visibleFileCount, this.fileThreshold);
+    this.pollingEnabled = this.strategy.polling;
+    this.fallbackReason = this.strategy.fallbackReason ?? null;
     this.started = true;
     this.onStatus(this.getStatus());
     if (this.strategy.strategy === "off") return this.getStatus();
@@ -123,6 +165,10 @@ class RepositoryWatcher {
     });
     this.watcher.on("all", (eventType, changedPath) => this.handleFileEvent(eventType, changedPath));
     this.watcher.on("error", (error) => this.handleError(error));
+    if (this.pollingEnabled) {
+      await this.pollNow();
+      this.schedulePoll();
+    }
     return this.getStatus();
   }
 
@@ -134,7 +180,10 @@ class RepositoryWatcher {
       visibleFileCount: this.strategy?.visibleFileCount ?? null,
       threshold: this.fileThreshold,
       watching: Boolean(this.watcher),
-      polling: false,
+      polling: this.pollingEnabled,
+      pollIntervalMs: this.active ? this.activePollMs : this.inactivePollMs,
+      fallbackReason: this.fallbackReason,
+      active: this.active,
       running: this.started,
     };
   }
@@ -165,15 +214,68 @@ class RepositoryWatcher {
 
   handleError(error) {
     this.onError(error);
+    if (this.started && !this.pollingEnabled) {
+      this.pollingEnabled = true;
+      this.fallbackReason = "watch-error";
+      void this.pollNow();
+      this.schedulePoll();
+    }
     this.onStatus(this.getStatus());
+  }
+
+  setActive(active) {
+    this.active = Boolean(active);
+    if (this.pollingEnabled) this.schedulePoll();
+    this.onStatus(this.getStatus());
+  }
+
+  schedulePoll() {
+    if (this.pollTimer) clearTimeout(this.pollTimer);
+    if (!this.started || !this.pollingEnabled) return;
+    const delay = this.active ? this.activePollMs : this.inactivePollMs;
+    this.pollTimer = setTimeout(async () => {
+      this.pollTimer = null;
+      await this.pollNow();
+      this.schedulePoll();
+    }, delay);
+  }
+
+  async pollNow() {
+    if (!this.started || !this.pollingEnabled || this.pollingInFlight || !this.repository) return null;
+    this.pollingInFlight = true;
+    try {
+      const current = await this.pollStatusFn(this.repository.rootPath);
+      const previous = this.pollingSnapshot;
+      this.pollingSnapshot = current;
+      if (previous && previous.fingerprint !== current.fingerprint) {
+        const kind = previous.oid !== current.oid || previous.branch !== current.branch ? "head" : "worktree";
+        this.onChange({
+          repositoryPath: this.repository.rootPath,
+          kind,
+          kinds: [kind],
+          paths: [],
+          timestamp: Date.now(),
+        });
+      }
+      return current;
+    } catch (error) {
+      this.onError(error);
+      return null;
+    } finally {
+      this.pollingInFlight = false;
+    }
   }
 
   async stop() {
     this.started = false;
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     if (this.maxWaitTimer) clearTimeout(this.maxWaitTimer);
+    if (this.pollTimer) clearTimeout(this.pollTimer);
     this.debounceTimer = null;
     this.maxWaitTimer = null;
+    this.pollTimer = null;
+    this.pollingEnabled = false;
+    this.pollingSnapshot = null;
     this.pendingEvents = [];
     const watcher = this.watcher;
     this.watcher = null;
@@ -184,11 +286,14 @@ class RepositoryWatcher {
 
 module.exports = {
   DEFAULT_DEBOUNCE_MS,
+  DEFAULT_ACTIVE_POLL_MS,
   DEFAULT_FILE_THRESHOLD,
+  DEFAULT_INACTIVE_POLL_MS,
   DEFAULT_MAX_WAIT_MS,
   WATCH_MODES,
   RepositoryWatcher,
   countVisibleFiles,
   createIgnoredPath,
+  readStatusSnapshot,
   resolveWatchStrategy,
 };

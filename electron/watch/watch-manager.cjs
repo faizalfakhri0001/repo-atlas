@@ -18,6 +18,7 @@ class WatchManager {
       ...(this.watcherFactory.watchFactory ? { watchFactory: this.watcherFactory.watchFactory } : {}),
       ...(this.watcherFactory.resolveRepositoryFn ? { resolveRepositoryFn: this.watcherFactory.resolveRepositoryFn } : {}),
       ...(this.watcherFactory.countVisibleFilesFn ? { countVisibleFilesFn: this.watcherFactory.countVisibleFilesFn } : {}),
+      ...(this.watcherFactory.pollStatusFn ? { pollStatusFn: this.watcherFactory.pollStatusFn } : {}),
       onChange: (event) => this.onChange({ ...event, sessionId }),
       onError: (error) => this.onError(error, sessionId),
       onStatus: (status) => this.onStatus({ ...status, sessionId }),
@@ -46,6 +47,13 @@ class WatchManager {
 
   getStatus(sessionId) {
     return this.watchers.get(sessionId)?.getStatus() ?? null;
+  }
+
+  setActivity(sessionId, active) {
+    const watcher = this.watchers.get(sessionId);
+    if (!watcher) return false;
+    watcher.setActive(active);
+    return true;
   }
 
   get size() {
