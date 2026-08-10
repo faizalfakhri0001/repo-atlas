@@ -19,6 +19,7 @@ const {
   scanRepository,
   listRepositoryFiles,
   parseRepositoryFileList,
+  readRepositoryFile,
   listCommits,
   getCommitDetails,
   getFileDiff,
@@ -167,6 +168,42 @@ test("listRepositoryFiles follows Git ignore rules and reports tracked state", a
   assert.equal(files.find((file) => file.path === "tracked.js").tracked, true);
   assert.equal(files.find((file) => file.path === "untracked.md").tracked, false);
   assert.equal(files.some((file) => file.path === "ignored.log"), false);
+});
+
+test("readRepositoryFile returns text, binary, and bounded preview metadata", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-content-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+
+  const git = (...args) => execFileAsync("git", args, { cwd: root, encoding: "utf8" });
+  await git("init", "-b", "main");
+  await git("config", "user.name", "Repo Atlas Test");
+  await git("config", "user.email", "repo-atlas@example.test");
+  await fs.writeFile(path.join(root, "app.js"), "export const answer = 42;\n");
+  await fs.writeFile(path.join(root, "image.bin"), Buffer.from([0, 1, 2, 3, 4]));
+  await fs.writeFile(path.join(root, "large.txt"), "x".repeat(1_000_025));
+  await git("add", ".");
+  await git("commit", "-m", "Add files");
+
+  const text = await readRepositoryFile(root, "app.js");
+  assert.deepEqual(text, {
+    path: "app.js",
+    text: "export const answer = 42;\n",
+    binary: false,
+    truncated: false,
+    size: 26,
+    language: "JavaScript",
+  });
+
+  const binary = await readRepositoryFile(root, "image.bin");
+  assert.equal(binary.binary, true);
+  assert.equal(binary.text, null);
+
+  const large = await readRepositoryFile(root, "large.txt");
+  assert.equal(large.truncated, true);
+  assert.equal(large.size, 1_000_025);
+  assert.equal(large.text.length, 1_000_000);
+
+  await assert.rejects(() => readRepositoryFile(root, "../outside.txt"), (error) => error?.code === "PATH_OUTSIDE_REPOSITORY");
 });
 
 test("commit inspection, compare, and cherry-pick flows work end to end", async (t) => {
