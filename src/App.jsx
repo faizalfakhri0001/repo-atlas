@@ -37,6 +37,7 @@ import { RefsView } from "@/components/refs-view";
 import { CherryPickDialog } from "@/components/cherry-pick-dialog";
 import { StateBanner } from "@/components/state-banner";
 import { cn, formatRelativeDate, truncateMiddle } from "@/lib/utils";
+import { useWorkspaceStore } from "@/app/workspace-store";
 
 const NAV_ITEMS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -50,14 +51,15 @@ const NAV_ITEMS = [
 ];
 
 function App() {
-  const [data, setData] = useState(null);
-  const [activeView, setActiveView] = useState("overview");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const { activeSession, actions } = useWorkspaceStore();
+  const data = activeSession?.snapshot ?? null;
+  const activeView = activeSession?.activeView ?? "overview";
+  const loading = activeSession?.loading ?? false;
+  const error = activeSession?.error ?? null;
+  const graphRequest = activeSession?.ui.graphRequest ?? null;
+  const compareInit = activeSession?.ui.compareInit ?? null;
+  const cherryPick = activeSession?.ui.cherryPick ?? null;
   const [theme, setTheme] = useState(() => localStorage.getItem("repo-atlas-theme") || "dark");
-  const [graphRequest, setGraphRequest] = useState(null);
-  const [compareInit, setCompareInit] = useState(null);
-  const [cherryPick, setCherryPick] = useState(null);
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -66,22 +68,19 @@ function App() {
   }, [theme]);
 
   const loadRepository = useCallback(async (repositoryPath) => {
-    setLoading(true);
-    setError(null);
+    actions.startLoading(repositoryPath);
     try {
       const response = await api.scanRepository(repositoryPath);
       if (!response?.ok) {
-        setError(response?.error || { message: "Repository scan failed.", code: "SCAN_FAILED" });
+        actions.loadFailed(repositoryPath, response?.error || { message: "Repository scan failed.", code: "SCAN_FAILED" });
         return;
       }
-      setData(response.data);
+      actions.loadSucceeded(repositoryPath, response.data);
       localStorage.setItem("repo-atlas-last-repository", response.data.repository.rootPath);
     } catch (scanError) {
-      setError({ message: scanError?.message || "Repository scan failed.", code: "SCAN_FAILED" });
-    } finally {
-      setLoading(false);
+      actions.loadFailed(repositoryPath, { message: scanError?.message || "Repository scan failed.", code: "SCAN_FAILED" });
     }
-  }, []);
+  }, [actions]);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -101,25 +100,25 @@ function App() {
 
   // Cross-view navigation helpers.
   const openCompare = useCallback((base, head) => {
-    setCompareInit({ base, head, nonce: Date.now() });
-    setActiveView("compare");
-  }, []);
+    actions.setCompareInit({ base, head, nonce: Date.now() });
+    actions.setActiveView("compare");
+  }, [actions]);
 
   const openCherryPick = useCallback((hashes) => {
-    if (hashes?.length > 0) setCherryPick({ hashes, nonce: Date.now() });
-  }, []);
+    if (hashes?.length > 0) actions.setCherryPick({ hashes, nonce: Date.now() });
+  }, [actions]);
 
   const showBranchInGraph = useCallback((branchName) => {
-    setGraphRequest({ refs: [branchName], nonce: Date.now() });
-    setActiveView("commits");
-  }, []);
+    actions.setGraphRequest({ refs: [branchName], nonce: Date.now() });
+    actions.setActiveView("commits");
+  }, [actions]);
 
   const focusCommitInGraph = useCallback((hash) => {
-    setGraphRequest({ focusHash: hash, nonce: Date.now() });
-    setActiveView("commits");
-  }, []);
+    actions.setGraphRequest({ focusHash: hash, nonce: Date.now() });
+    actions.setActiveView("commits");
+  }, [actions]);
 
-  const showWorkspace = useCallback(() => setActiveView("workspace"), []);
+  const showWorkspace = useCallback(() => actions.setActiveView("workspace"), [actions]);
 
   const counts = useMemo(
     () => ({
@@ -193,7 +192,7 @@ function App() {
                   key={item.id}
                   type="button"
                   disabled={!data}
-                  onClick={() => setActiveView(item.id)}
+                  onClick={() => actions.setActiveView(item.id)}
                   className={cn(
                     "flex h-9 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors disabled:opacity-40",
                     activeView === item.id && data
@@ -309,7 +308,7 @@ function App() {
             repoPath={data.repository.rootPath}
             hashes={cherryPick.hashes}
             currentBranch={data.repository.currentBranch}
-            onClose={() => setCherryPick(null)}
+            onClose={() => actions.setCherryPick(null)}
             onDone={handleRefresh}
           />
         )}
