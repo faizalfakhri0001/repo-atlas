@@ -7,6 +7,7 @@ import {
   CircleDot,
   ExternalLink,
   Files,
+  Flame,
   FlaskConical,
   FolderGit2,
   FolderOpen,
@@ -37,6 +38,7 @@ import { CompareView } from "@/features/compare";
 import { WorktreesView, SubmodulesView, RefsView } from "@/features/metadata";
 import { WorkspaceView } from "@/features/workspace";
 import { FileExplorer } from "@/features/files";
+import { HotspotsView } from "@/features/hotspots";
 import { GlobalSearch } from "@/features/search";
 import { CherryPickDialog } from "@/components/cherry-pick-dialog";
 import { StateBanner } from "@/features/repository";
@@ -56,6 +58,7 @@ const NAV_ITEMS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "commits", label: "Commits", icon: GitCommitHorizontal },
   { id: "files", label: "Files", icon: Files },
+  { id: "hotspots", label: "Hotspots", icon: Flame },
   { id: "branches", label: "Branches", icon: GitBranch },
   { id: "compare", label: "Compare / PR", icon: GitCompareArrows },
   { id: "worktrees", label: "Worktrees", icon: Workflow },
@@ -82,6 +85,7 @@ export function AppShell({
   onQuickOpenFile,
   onOpenFile,
   onFileHistoryChange,
+  onOpenFileHistory,
   onClearCherryPick,
   onActivateRepository,
   onCloseRepository,
@@ -357,6 +361,7 @@ export function AppShell({
                     onFocusCommit={onFocusCommit}
                     onShowWorkspace={onShowWorkspace}
                     onFileHistoryChange={(value) => onFileHistoryChange?.(loadedSession.id, value)}
+                    onOpenFileHistory={(path) => onOpenFileHistory?.(loadedSession.id, path)}
                   />
                 </div>
               ))
@@ -421,6 +426,7 @@ function ViewHost({
   fileFilterRequest,
   fileSelectionRequest,
   onFileHistoryChange,
+  onOpenFileHistory,
 }) {
   // Commits and Compare stay mounted so their state (filters, selection,
   // loaded pages) survives navigation.
@@ -463,6 +469,7 @@ function ViewHost({
           onHistoryStateChange={onFileHistoryChange}
         />
       )}
+      {view === "hotspots" && <HotspotsView repoPath={data.repository.rootPath} onOpenFileHistory={onOpenFileHistory} />}
       {view === "refs" && <RefsView data={data} />}
     </>
   );
