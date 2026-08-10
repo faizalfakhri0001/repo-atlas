@@ -31,6 +31,7 @@ export function RepositoryTabs({
               <button
                 type="button"
                 role="tab"
+                id={`repository-tab-${session.id}`}
                 aria-selected={isActive}
                 aria-controls={`repository-panel-${session.id}`}
                 onClick={() => onActivate(session.id)}

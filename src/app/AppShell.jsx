@@ -79,7 +79,9 @@ export function AppShell({
   const loading = session?.loading ?? false;
   const error = session?.error ?? null;
   const cherryPick = session?.ui.cherryPick ?? null;
-  const loadedSessions = sessions.filter((candidate) => candidate.snapshot);
+  const selectedSessionId = activeSessionId ?? session?.id;
+  const workspaceSessions = sessions.length > 0 ? sessions : session ? [session] : [];
+  const loadedSessions = workspaceSessions.filter((candidate) => candidate.snapshot);
 
   const counts = useMemo(
     () => ({
@@ -262,7 +264,10 @@ export function AppShell({
               loadedSessions.map((loadedSession) => (
                 <div
                   key={loadedSession.id}
-                  className={cn("h-full", loadedSession.id !== activeSessionId && "hidden")}
+                  id={`repository-panel-${loadedSession.id}`}
+                  role="tabpanel"
+                  aria-labelledby={`repository-tab-${loadedSession.id}`}
+                  className={cn("h-full", loadedSession.id !== selectedSessionId && "hidden")}
                 >
                   <ViewHost
                     view={loadedSession.activeView}
