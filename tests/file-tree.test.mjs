@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildFileTree, collectDirectoryPaths, filterFileEntries, flattenVisibleTree } from "../src/lib/file-tree.js";
+import {
+  buildFileTree,
+  collectDirectoryPaths,
+  filterFileEntries,
+  flattenVisibleTree,
+  getWorkingTreeStatus,
+  mergeWorkingTreeStatuses,
+} from "../src/lib/file-tree.js";
 
 test("buildFileTree creates sorted directories and aggregates working changes", () => {
   const tree = buildFileTree([
@@ -46,4 +53,18 @@ test("filterFileEntries matches file name, path, and extension without reading c
   assert.deepEqual(filterFileEntries(files, "docs/"), [files[1]]);
   assert.deepEqual(filterFileEntries(files, "json"), [files[2]]);
   assert.deepEqual(filterFileEntries(files, ""), files);
+});
+
+test("working tree status maps Git porcelain entries to file badges", () => {
+  assert.equal(getWorkingTreeStatus({ kind: "untracked", index: "?", worktree: "?" }), "?");
+  assert.equal(getWorkingTreeStatus({ kind: "changed", index: ".", worktree: "M" }), "M");
+  assert.equal(getWorkingTreeStatus({ kind: "renamed", index: "R", worktree: "." }), "R");
+  assert.equal(getWorkingTreeStatus({ kind: "conflict", index: "U", worktree: "U" }), "U");
+  assert.deepEqual(
+    mergeWorkingTreeStatuses(
+      [{ path: "src/app.js", status: null }, { path: "notes.md", status: null }],
+      [{ kind: "changed", index: ".", worktree: "M", path: "src/app.js" }],
+    ).map((file) => file.status),
+    ["M", null],
+  );
 });

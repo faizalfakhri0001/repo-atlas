@@ -350,7 +350,7 @@ function ViewHost({
       {view === "worktrees" && <WorktreesView worktrees={data.worktrees} />}
       {view === "submodules" && <SubmodulesView submodules={data.submodules} />}
       {view === "workspace" && <WorkspaceView status={data.status} repoPath={data.repository.rootPath} />}
-      {view === "files" && <FileExplorer repoPath={data.repository.rootPath} />}
+      {view === "files" && <FileExplorer repoPath={data.repository.rootPath} status={data.status} />}
       {view === "refs" && <RefsView data={data} />}
     </>
   );

@@ -166,6 +166,7 @@ export function DiffView({ repoPath, request, className, maxHeight }) {
 }
 
 const STATUS_META = {
+  "?": ["untracked", "border-sky-500/25 bg-sky-500/10 text-sky-500"],
   A: ["added", "border-emerald-500/25 bg-emerald-500/10 text-emerald-500"],
   M: ["modified", "border-amber-500/25 bg-amber-500/10 text-amber-500"],
   D: ["deleted", "border-rose-500/25 bg-rose-500/10 text-rose-500"],

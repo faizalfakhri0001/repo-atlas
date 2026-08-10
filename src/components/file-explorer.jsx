@@ -9,15 +9,21 @@ import {
   Search,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { buildFileTree, collectDirectoryPaths, filterFileEntries, flattenVisibleTree } from "@/lib/file-tree";
+import {
+  buildFileTree,
+  collectDirectoryPaths,
+  filterFileEntries,
+  flattenVisibleTree,
+  mergeWorkingTreeStatuses,
+} from "@/lib/file-tree";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FileStatusBadge } from "@/components/diff-view";
 
 const ROW_HEIGHT = 28;
 const OVERSCAN = 8;
 
-export function FileExplorer({ repoPath, onSelectFile }) {
+export function FileExplorer({ repoPath, status, onSelectFile }) {
   const [state, setState] = useState({ loading: true, error: null, files: [] });
   const [expandedPaths, setExpandedPaths] = useState(() => new Set());
   const [selectedPath, setSelectedPath] = useState(null);
@@ -47,7 +53,8 @@ export function FileExplorer({ repoPath, onSelectFile }) {
     };
   }, [repoPath]);
 
-  const filteredFiles = useMemo(() => filterFileEntries(state.files, query), [state.files, query]);
+  const indexedFiles = useMemo(() => mergeWorkingTreeStatuses(state.files, status?.files), [state.files, status?.files]);
+  const filteredFiles = useMemo(() => filterFileEntries(indexedFiles, query), [indexedFiles, query]);
   const tree = useMemo(() => buildFileTree(filteredFiles), [filteredFiles]);
   const visibleRows = useMemo(() => flattenVisibleTree(tree, expandedPaths), [tree, expandedPaths]);
   const firstRow = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
@@ -138,6 +145,7 @@ export function FileExplorer({ repoPath, onSelectFile }) {
                           node.path === selectedPath && "bg-primary/10 text-primary",
                         )}
                         style={{ paddingLeft: `${8 + depth * 16}px` }}
+                        aria-label={node.name}
                         title={node.path}
                       >
                         {isDirectory ? (
@@ -147,6 +155,11 @@ export function FileExplorer({ repoPath, onSelectFile }) {
                         )}
                         <Icon className={cn("size-3.5 shrink-0", isDirectory ? "text-sky-400" : "text-muted-foreground")} />
                         <span className="min-w-0 flex-1 truncate">{node.name}</span>
+                        {node.changeCount > 0 && (
+                          <span className="shrink-0 text-[10px] tabular-nums text-amber-400" title={`${node.changeCount} working tree changes`}>
+                            {isDirectory ? node.changeCount : <FileStatusBadge status={node.status} />}
+                          </span>
+                        )}
                       </button>
                     );
                   })}

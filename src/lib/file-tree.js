@@ -77,8 +77,8 @@ export function buildFileTree(files = []) {
       tracked: Boolean(entry.tracked),
       size: entry.size ?? null,
       status: entry.status ?? null,
-      changeCount: 0,
-      statusCounts: {},
+      changeCount: entry.status && entry.status !== "." ? 1 : 0,
+      statusCounts: entry.status && entry.status !== "." ? { [entry.status]: 1 } : {},
     });
   }
 
@@ -116,6 +116,23 @@ export function filterFileEntries(files = [], query = "") {
     const extension = String(file?.extension ?? "").toLowerCase();
     return path.includes(normalized) || name.includes(normalized) || extension.includes(normalized);
   });
+}
+
+function meaningfulStatusCode(value) {
+  return value && value !== "." && value !== " " && value !== "?" ? value : null;
+}
+
+export function getWorkingTreeStatus(file) {
+  if (!file || file.kind === "ignored") return null;
+  if (file.kind === "conflict" || file.index === "U" || file.worktree === "U") return "U";
+  if (file.kind === "untracked" || file.index === "?" || file.worktree === "?") return "?";
+  if (file.kind === "renamed" || file.index === "R" || file.worktree === "R") return "R";
+  return meaningfulStatusCode(file.index) ?? meaningfulStatusCode(file.worktree) ?? (file.kind === "changed" ? "M" : null);
+}
+
+export function mergeWorkingTreeStatuses(files = [], statusFiles = []) {
+  const statuses = new Map(statusFiles.map((file) => [normalizeFilePath(file?.path), getWorkingTreeStatus(file)]));
+  return files.map((file) => ({ ...file, status: statuses.get(normalizeFilePath(file.path)) ?? file.status ?? null }));
 }
 
 export function collectDirectoryPaths(root) {

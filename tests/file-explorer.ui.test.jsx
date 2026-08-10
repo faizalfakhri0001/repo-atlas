@@ -20,11 +20,17 @@ describe("FileExplorer", () => {
       ],
     });
     const user = userEvent.setup();
-    render(<FileExplorer repoPath="/workspace/repository" />);
+    render(
+      <FileExplorer
+        repoPath="/workspace/repository"
+        status={{ files: [{ kind: "changed", index: ".", worktree: "M", path: "src/app.js" }] }}
+      />,
+    );
 
     expect(await screen.findByRole("tree", { name: "Repository files" })).toBeInTheDocument();
     expect(await screen.findByRole("treeitem", { name: "src" })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("treeitem", { name: "app.js" })).toBeInTheDocument();
+    expect(screen.getByTitle("modified")).toBeInTheDocument();
 
     await user.click(screen.getByRole("treeitem", { name: "src" }));
     expect(screen.queryByRole("treeitem", { name: "app.js" })).not.toBeInTheDocument();
