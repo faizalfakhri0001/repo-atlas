@@ -400,7 +400,7 @@ export function BranchesView({
                           <TooltipTrigger asChild>
                             <button
                               type="button"
-                              aria-label={`Compare ${branch.name} with ${reportDefaultBranch}`}
+                              aria-label={`Compare ${branch.name} with default ${reportDefaultBranch}`}
                               onClick={() => onCompareWithDefault?.(reportDefaultBranch, branch.name)}
                               className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                             >
@@ -415,7 +415,7 @@ export function BranchesView({
                           <TooltipTrigger asChild>
                             <button
                               type="button"
-                              aria-label={`Compare ${branch.name} with ${currentBranch}`}
+                              aria-label={`Compare ${branch.name} with current ${currentBranch}`}
                               onClick={() => onCompareWithCurrent?.(branch.name)}
                               className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                             >

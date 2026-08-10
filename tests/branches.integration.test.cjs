@@ -39,6 +39,11 @@ test("branch intelligence reports ahead and behind counts against the current de
   await git("commit", "-m", "Add ahead change");
   await git("checkout", "main");
   await git("branch", "feature/behind", "main~1");
+  await git("checkout", "-b", "feature/diverged", "main~1");
+  await write("diverged.txt", "diverged\n");
+  await git("add", "diverged.txt");
+  await git("commit", "-m", "Add diverged change");
+  await git("checkout", "main");
   await git("branch", "feature/gone", "main");
   await git("remote", "add", "origin", "/tmp/repo-atlas-missing-remote.git");
   const goneHash = (await git("rev-parse", "feature/gone")).stdout.trim();
@@ -67,4 +72,30 @@ test("branch intelligence reports ahead and behind counts against the current de
   const gone = result.branches.find((branch) => branch.name === "feature/gone");
   assert.equal(gone.goneUpstream, true);
   assert.equal(gone.status, "gone");
+  const diverged = result.branches.find((branch) => branch.name === "feature/diverged");
+  assert.deepEqual({ ahead: diverged.aheadOfDefault, behind: diverged.behindDefault }, { ahead: 1, behind: 1 });
+  assert.equal(diverged.status, "diverged");
+});
+
+test("branch intelligence keeps a large local branch set bounded", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-branch-limit-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+
+  const git = (...args) => execFileAsync("git", args, { cwd: root, encoding: "utf8" });
+  await git("init", "-b", "main");
+  await git("config", "user.name", "Repo Atlas Test");
+  await git("config", "user.email", "repo-atlas@example.test");
+  await fs.writeFile(path.join(root, "README.md"), "initial\n");
+  await git("add", "README.md");
+  await git("commit", "-m", "Initial commit");
+  for (let index = 0; index < 120; index += 1) {
+    await git("branch", `feature/bounded-${String(index).padStart(3, "0")}`, "main");
+  }
+
+  const result = await branchIntelligence(root);
+  assert.equal(result.scope.totalLocal, 121);
+  assert.equal(result.scope.analyzedLocal, 121);
+  assert.equal(result.scope.omittedLocal, 0);
+  assert.equal(result.scope.concurrency, 4);
+  assert.equal(result.scope.truncated, false);
 });
