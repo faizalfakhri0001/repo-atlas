@@ -1,2 +1,7 @@
-// Public entry point for command palette features.
-export {};
+export {
+  createCommand,
+  createCommandRegistry,
+  isCommandEnabled,
+  isCommandVisible,
+  normalizeShortcut,
+} from "./command-registry.js";
