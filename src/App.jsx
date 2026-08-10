@@ -14,12 +14,27 @@ function App() {
   const sessionsRef = useRef(state.sessions);
   const watchedSessionIdsRef = useRef(new Set());
   const refreshQueuesRef = useRef(new Map());
+  const completedOperationIdsRef = useRef(new Set());
+  const [operationMode, setOperationMode] = useState(() => (isDemo ? "read-only" : null));
   sessionsRef.current = state.sessions;
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     localStorage.setItem("repo-atlas-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (typeof api.getOperationMode !== "function") return undefined;
+    let mounted = true;
+    void api.getOperationMode().then((response) => {
+      if (!mounted || response?.ok === false) return;
+      const value = response?.data?.operationMode ?? response?.data?.mode ?? response?.data;
+      if (value === "read-only" || value === "safe-write") setOperationMode(value);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const loadRepository = useCallback(
     async (repositoryPath, { forceReload = false, refresh = false, sessionId = null } = {}) => {
@@ -74,6 +89,10 @@ function App() {
   const enqueueRepositoryChange = useCallback(
     (event) => {
       if (!event?.kind || typeof api.refreshRepositoryPartial !== "function") return;
+      if (event.transactionId && completedOperationIdsRef.current.has(event.transactionId)) {
+        completedOperationIdsRef.current.delete(event.transactionId);
+        return;
+      }
       const session = sessionsRef.current.find(
         (candidate) => candidate.id === event.sessionId || candidate.path === event.repositoryPath,
       );
@@ -130,6 +149,54 @@ function App() {
       })();
     },
     [actions],
+  );
+
+  const changeOperationMode = useCallback(async (mode) => {
+    if (isDemo || typeof api.setOperationMode !== "function") return { ok: false, error: { message: "Demo mode is read-only.", code: "DEMO_MODE" } };
+    try {
+      const response = await api.setOperationMode({ mode });
+      if (response?.ok !== false) {
+        const nextMode = response?.data?.operationMode ?? response?.data?.mode ?? mode;
+        if (nextMode === "read-only" || nextMode === "safe-write") setOperationMode(nextMode);
+      }
+      return response;
+    } catch (error) {
+      return {
+        ok: false,
+        error: { message: error?.message || "Operation policy could not be changed.", code: "POLICY_FAILED" },
+      };
+    }
+  }, []);
+
+  const runWorkspaceOperation = useCallback(
+    async (sessionId, operation, paths) => {
+      const session = state.sessions.find((candidate) => candidate.id === sessionId);
+      const method = operation === "unstage" ? api.unstageFiles : api.stageFiles;
+      if (!session?.path || typeof method !== "function") {
+        const error = { message: "Workspace operation is unavailable.", code: "OPERATION_UNAVAILABLE" };
+        actions.workspaceOperationFailed(sessionId, error);
+        return { ok: false, error };
+      }
+      try {
+        const response = await method({ sessionId, repositoryPath: session.path, paths });
+        if (response?.ok === false) {
+          actions.workspaceOperationFailed(sessionId, response.error ?? { message: "Workspace operation failed.", code: "OPERATION_FAILED" });
+          return response;
+        }
+        const payload = response?.data ?? response;
+        if (payload?.transactionId) {
+          completedOperationIdsRef.current.add(payload.transactionId);
+          setTimeout(() => completedOperationIdsRef.current.delete(payload.transactionId), 5_000);
+        }
+        actions.workspaceOperationSucceeded(sessionId, payload);
+        return response;
+      } catch (operationError) {
+        const error = { message: operationError?.message || "Workspace operation failed.", code: "OPERATION_FAILED" };
+        actions.workspaceOperationFailed(sessionId, error);
+        return { ok: false, error };
+      }
+    },
+    [actions, state.sessions],
   );
 
   useEffect(() => {
@@ -323,6 +390,7 @@ function App() {
       sessions={state.sessions}
       activeSessionId={state.activeSessionId}
       recentRepositories={state.recentRepositories}
+      operationMode={operationMode}
       theme={theme}
       onThemeChange={setTheme}
       onOpen={handleOpen}
@@ -350,6 +418,8 @@ function App() {
       onRevealRecent={revealRecentRepository}
       onLocateMissing={locateMissingRepository}
       onRemoveMissing={removeMissingRepository}
+      onSetOperationMode={changeOperationMode}
+      onWorkspaceOperation={runWorkspaceOperation}
     />
   );
 }

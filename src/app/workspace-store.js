@@ -72,6 +72,8 @@ export function useWorkspaceStore({ storage = null } = {}) {
       setWatchError: (sessionId, error) => dispatch({ type: "session/set-watch-error", sessionId, error }),
       partialRefreshSucceeded: (sessionId, data, event, parts = null) => dispatch({ type: "session/partial-refresh-success", sessionId, data, event, parts }),
       partialRefreshFailed: (sessionId, error) => dispatch({ type: "session/partial-refresh-failure", sessionId, error }),
+      workspaceOperationSucceeded: (sessionId, data) => dispatch({ type: "session/workspace-operation-success", sessionId, data }),
+      workspaceOperationFailed: (sessionId, error) => dispatch({ type: "session/workspace-operation-failure", sessionId, error }),
     }),
     [],
   );

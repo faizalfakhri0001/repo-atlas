@@ -78,6 +78,7 @@ export function AppShell({
   session,
   sessions = [],
   activeSessionId,
+  operationMode,
   theme,
   onThemeChange,
   onOpen,
@@ -106,6 +107,8 @@ export function AppShell({
   onRevealRecent,
   onLocateMissing,
   onRemoveMissing,
+  onSetOperationMode,
+  onWorkspaceOperation,
 }) {
   const data = session?.snapshot ?? null;
   const loading = session?.loading ?? false;
@@ -394,6 +397,12 @@ export function AppShell({
                     fileFilterRequest={loadedSession.ui.fileFilterRequest}
                     fileSelectionRequest={loadedSession.ui.fileSelectionRequest}
                     navigationRequest={loadedSession.ui.navigationRequest}
+                    operationMode={operationMode}
+                    isDemo={isDemo}
+                    operationError={loadedSession.ui.workspaceOperationError}
+                    onSetOperationMode={onSetOperationMode}
+                    onWorkspaceOperation={(operation, paths) => onWorkspaceOperation?.(loadedSession.id, operation, paths)}
+                    onRefresh={onRefresh}
                     onCompare={onCompare}
                     onNavigate={onNavigate}
                     onCherryPick={onCherryPick}
@@ -469,6 +478,12 @@ function ViewHost({
   fileFilterRequest,
   fileSelectionRequest,
   navigationRequest,
+  operationMode,
+  isDemo,
+  operationError,
+  onSetOperationMode,
+  onWorkspaceOperation,
+  onRefresh,
   onFileHistoryChange,
   onOpenFileHistory,
   onOpenFileAtRevision,
@@ -506,7 +521,18 @@ function ViewHost({
       )}
       {view === "worktrees" && <WorktreesView worktrees={data.worktrees} />}
       {view === "submodules" && <SubmodulesView submodules={data.submodules} />}
-      {view === "workspace" && <WorkspaceView status={data.status} repoPath={data.repository.rootPath} />}
+      {view === "workspace" && (
+        <WorkspaceView
+          status={data.status}
+          repoPath={data.repository.rootPath}
+          operationMode={operationMode}
+          isDemo={isDemo}
+          operationError={operationError}
+          onSetOperationMode={onSetOperationMode}
+          onOperation={onWorkspaceOperation}
+          onRefresh={onRefresh}
+        />
+      )}
       {view === "files" && (
         <FileExplorer
           repoPath={data.repository.rootPath}

@@ -189,6 +189,36 @@ function applyLoadError(state, action) {
   return { ...nextState, activeSessionId: ensured.sessionId };
 }
 
+function applyWorkspaceOperationSuccess(state, action) {
+  return updateSession(state, action.sessionId, (session) => {
+    if (!session.snapshot) return session;
+    const data = action.data ?? {};
+    return {
+      ...session,
+      snapshot: {
+        ...session.snapshot,
+        ...(data.status ? { status: data.status } : {}),
+        ...(data.repository ? { repository: { ...session.snapshot.repository, ...data.repository } } : {}),
+      },
+      status: "ready",
+      loading: false,
+      error: null,
+      ui: {
+        ...session.ui,
+        watchError: null,
+        workspaceOperationError: null,
+        lastWorkspaceOperation: {
+          operation: data.operation ?? action.operation ?? null,
+          paths: data.paths ?? [],
+          changed: Boolean(data.changed),
+          transactionId: data.transactionId ?? null,
+          completedAt: action.completedAt ?? Date.now(),
+        },
+      },
+    };
+  });
+}
+
 export function workspaceReducer(state, action) {
   switch (action.type) {
     case "SESSION_OPEN_REQUEST":
@@ -299,6 +329,15 @@ export function workspaceReducer(state, action) {
       return updateSession(state, action.sessionId, (session) => ({
         ...session,
         ui: { ...session.ui, watchError: action.error ?? { message: "Automatic refresh failed." } },
+      }));
+
+    case "session/workspace-operation-success":
+      return applyWorkspaceOperationSuccess(state, action);
+
+    case "session/workspace-operation-failure":
+      return updateSession(state, action.sessionId, (session) => ({
+        ...session,
+        ui: { ...session.ui, workspaceOperationError: action.error ?? { message: "Workspace operation failed." } },
       }));
 
     case "RECENT_UPSERT":
