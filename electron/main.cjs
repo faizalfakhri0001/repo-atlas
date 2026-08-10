@@ -6,6 +6,7 @@ const {
   readRepositoryFile,
   listFileHistory,
   readFileAtRevision,
+  fileBlame,
   resolveRepositoryFilePath,
   listCommits,
   getCommitDetails,
@@ -93,6 +94,7 @@ function registerIpcHandlers() {
     "repository:file-content": (payload) => readRepositoryFile(payload?.repositoryPath, payload?.path),
     "file:history": (payload) => listFileHistory(payload?.repositoryPath, payload ?? {}),
     "file:content-at-revision": (payload) => readFileAtRevision(payload?.repositoryPath, payload ?? {}),
+    "file:blame": (payload) => fileBlame(payload?.repositoryPath, payload ?? {}),
     "repository:reveal-file": async (payload) => {
       const target = await resolveRepositoryFilePath(payload?.repositoryPath, payload?.path);
       shell.showItemInFolder(target);
