@@ -9,9 +9,11 @@ const {
 } = require("./core.cjs");
 const { isBinaryBuffer } = require("./files.cjs");
 const { parseBlamePorcelain } = require("./blame-parser.cjs");
+const { BlameCache } = require("./blame-cache.cjs");
 
 const DEFAULT_BLAME_TIMEOUT = 30_000;
 const BLAME_SAMPLE_BYTES = 8_192;
+const blameCache = new BlameCache(10);
 
 async function readFileSample(target) {
   let handle;
@@ -37,11 +39,15 @@ async function fileBlame(repositoryPath, options = {}) {
   const repository = await resolveRepository(repositoryPath);
   const relativePath = assertRelativePath(options.path);
   const target = await resolveRepositoryFilePath(repository.rootPath, relativePath);
-  const resolvedRevision = await resolveCommit(repository.rootPath, options.revision ?? "HEAD");
+  const revisionInput = options.revision ?? "HEAD";
+  const resolvedRevision = await resolveCommit(repository.rootPath, revisionInput);
   const workingTreeDirty = await hasWorkingTreeChanges(repository.rootPath, relativePath);
+  if (revisionInput === "HEAD") blameCache.invalidateHead(repository.rootPath, resolvedRevision.hash);
+  const cached = blameCache.get(repository.rootPath, resolvedRevision.hash, relativePath);
+  if (cached) return { ...cached, workingTreeDirty, cached: true };
 
   if (isBinaryBuffer(await readFileSample(target))) {
-    return {
+    const binaryResult = {
       path: relativePath,
       revision: resolvedRevision.hash,
       lines: [],
@@ -50,6 +56,8 @@ async function fileBlame(repositoryPath, options = {}) {
       workingTreeDirty,
       message: "Blame unavailable for binary files.",
     };
+    blameCache.set(repository.rootPath, resolvedRevision.hash, relativePath, { ...binaryResult, workingTreeDirty: false });
+    return binaryResult;
   }
 
   const result = await runGit(
@@ -58,7 +66,7 @@ async function fileBlame(repositoryPath, options = {}) {
     { timeout: DEFAULT_BLAME_TIMEOUT },
   );
   const parsed = parseBlamePorcelain(result.stdout);
-  return {
+  const resultData = {
     path: relativePath,
     revision: resolvedRevision.hash,
     lines: parsed.lines,
@@ -66,12 +74,15 @@ async function fileBlame(repositoryPath, options = {}) {
     binary: false,
     workingTreeDirty,
   };
+  blameCache.set(repository.rootPath, resolvedRevision.hash, relativePath, { ...resultData, workingTreeDirty: false });
+  return resultData;
 }
 
 module.exports = {
   DEFAULT_BLAME_TIMEOUT,
   BLAME_SAMPLE_BYTES,
   fileBlame,
+  blameCache,
   hasWorkingTreeChanges,
   readFileSample,
 };
