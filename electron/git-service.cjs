@@ -17,7 +17,7 @@ const { listFileHistory } = require("./git/history.cjs");
 const { readFileAtRevision } = require("./git/revisions.cjs");
 const { searchRepository } = require("./git/search.cjs");
 const { getAnalyticsIndex, serializeAnalyticsIndex } = require("./git/analytics/index.cjs");
-const { parseBranchRows, resolveDefaultBranch } = require("./git/analytics/branches.cjs");
+const { parseBranchRows, resolveDefaultBranch, branchIntelligence } = require("./git/analytics/branches.cjs");
 
 const DEFAULT_COMMIT_LIMIT = 1000;
 const MAX_COMMIT_LIMIT = 5000;
@@ -977,6 +977,7 @@ module.exports = {
   getCommitDetails,
   getFileDiff,
   analyticsSummary,
+  branchIntelligence,
   compareRefs,
   cherryPickPreview,
   cherryPickExecute,
