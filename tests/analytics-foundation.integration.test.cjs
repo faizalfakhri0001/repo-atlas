@@ -31,6 +31,25 @@ function createHistoryImport(commitCount) {
   return chunks.join("");
 }
 
+function createWideCommitImport(fileCount) {
+  const blob = "wide change\n";
+  const chunks = [
+    "blob\n",
+    "mark :1\n",
+    `data ${Buffer.byteLength(blob)}\n`,
+    blob,
+    "commit refs/heads/main\n",
+    "mark :2\n",
+    "author Churn Test <churn@example.test> 1700000000 +0000\n",
+    "committer Churn Test <churn@example.test> 1700000000 +0000\n",
+    `data ${Buffer.byteLength("Wide repository change\n")}\nWide repository change\n`,
+  ];
+  for (let index = 0; index < fileCount; index += 1) {
+    chunks.push(`M 100644 :1 src/generated/file-${String(index).padStart(5, "0")}.txt\n`);
+  }
+  return chunks.join("");
+}
+
 function runFastImport(root, input) {
   return new Promise((resolve, reject) => {
     const child = spawn("git", ["fast-import"], { cwd: root, shell: false, stdio: ["pipe", "ignore", "pipe"] });
@@ -64,4 +83,22 @@ test("analytics foundation bounds a repository with more than ten thousand commi
   assert.equal(index.totals.commits, 10_000);
   assert.equal(index.authors.get("email:scale@example.test").commits, 10_000);
   assert.ok(elapsedMs < 30_000, `analytics build took ${elapsedMs}ms`);
+});
+
+test("analytics foundation bounds a commit with thousands of changed files", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-analytics-wide-change-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await execFileAsync("git", ["init", "-b", "main"], { cwd: root, encoding: "utf8" });
+  await runFastImport(root, createWideCommitImport(6_000));
+
+  const index = await buildAnalyticsIndex(root, { maxCommits: 10, maxFilesPerCommit: 100 });
+
+  assert.equal(index.scope.processedCommits, 1);
+  assert.equal(index.scope.truncated, false);
+  assert.equal(index.scope.filesTruncated, true);
+  assert.equal(index.totals.commits, 1);
+  assert.equal(index.totals.files, 100);
+  assert.equal(index.totals.additions, 100);
+  assert.equal(index.totals.deletions, 0);
+  assert.equal(index.commits[0].files.length, 100);
 });
