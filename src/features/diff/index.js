@@ -9,3 +9,4 @@ export { parseUnifiedDiff, countDiffLines, limitDiffHunks } from "@/features/dif
 export { alignSplitHunk, alignSplitDiff } from "@/features/diff/split-aligner";
 export { DiffMeta, UnifiedDiff } from "@/features/diff/unified-diff";
 export { SplitDiff } from "@/features/diff/split-diff";
+export { DiffToolbar } from "@/features/diff/diff-toolbar";
