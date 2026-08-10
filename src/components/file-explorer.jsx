@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
+  Copy,
+  ExternalLink,
   FileCode2,
   Folder,
   FolderOpen,
@@ -16,10 +18,18 @@ import {
   flattenVisibleTree,
   mergeWorkingTreeStatuses,
 } from "@/lib/file-tree";
-import { cn } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { FileStatusBadge } from "@/components/diff-view";
 import { FilePreview } from "@/components/file-preview";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 
 const ROW_HEIGHT = 28;
 const OVERSCAN = 8;
@@ -195,40 +205,63 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
                     const isExpanded = expandedPaths.has(node.path);
                     const Icon = isDirectory ? (isExpanded ? FolderOpen : Folder) : FileCode2;
                     return (
-                      <button
-                        key={node.id}
-                        type="button"
-                        role="treeitem"
-                        ref={(element) => {
-                          if (element) rowRefs.current.set(node.id, element);
-                          else rowRefs.current.delete(node.id);
-                        }}
-                        aria-expanded={isDirectory ? isExpanded : undefined}
-                        aria-selected={node.path === selectedPath}
-                        onClick={() => (isDirectory ? toggleDirectory(node.path) : selectFile(node))}
-                        className={cn(
-                          "flex h-7 w-full items-center gap-1.5 px-2 text-left text-xs hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                          node.path === selectedPath && "bg-primary/10 text-primary",
-                        )}
-                        style={{ paddingLeft: `${8 + depth * 16}px` }}
-                        aria-label={node.name}
-                        title={node.path}
-                        data-file-tree-row="true"
-                        onKeyDown={(event) => handleTreeKeyDown(event, node)}
-                      >
-                        {isDirectory ? (
-                          isExpanded ? <ChevronDown className="size-3 shrink-0" /> : <ChevronRight className="size-3 shrink-0" />
-                        ) : (
-                          <span className="size-3 shrink-0" />
-                        )}
-                        <Icon className={cn("size-3.5 shrink-0", isDirectory ? "text-sky-400" : "text-muted-foreground")} />
-                        <span className="min-w-0 flex-1 truncate">{node.name}</span>
-                        {node.changeCount > 0 && (
-                          <span className="shrink-0 text-[10px] tabular-nums text-amber-400" title={`${node.changeCount} working tree changes`}>
-                            {isDirectory ? node.changeCount : <FileStatusBadge status={node.status} />}
-                          </span>
-                        )}
-                      </button>
+                      <ContextMenu key={node.id}>
+                        <ContextMenuTrigger asChild>
+                          <button
+                            type="button"
+                            role="treeitem"
+                            ref={(element) => {
+                              if (element) rowRefs.current.set(node.id, element);
+                              else rowRefs.current.delete(node.id);
+                            }}
+                            aria-expanded={isDirectory ? isExpanded : undefined}
+                            aria-selected={node.path === selectedPath}
+                            onClick={() => (isDirectory ? toggleDirectory(node.path) : selectFile(node))}
+                            className={cn(
+                              "flex h-7 w-full items-center gap-1.5 px-2 text-left text-xs hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                              node.path === selectedPath && "bg-primary/10 text-primary",
+                            )}
+                            style={{ paddingLeft: `${8 + depth * 16}px` }}
+                            aria-label={node.name}
+                            title={node.path}
+                            data-file-tree-row="true"
+                            onKeyDown={(event) => handleTreeKeyDown(event, node)}
+                          >
+                            {isDirectory ? (
+                              isExpanded ? <ChevronDown className="size-3 shrink-0" /> : <ChevronRight className="size-3 shrink-0" />
+                            ) : (
+                              <span className="size-3 shrink-0" />
+                            )}
+                            <Icon className={cn("size-3.5 shrink-0", isDirectory ? "text-sky-400" : "text-muted-foreground")} />
+                            <span className="min-w-0 flex-1 truncate">{node.name}</span>
+                            {node.changeCount > 0 && (
+                              <span className="shrink-0 text-[10px] tabular-nums text-amber-400" title={`${node.changeCount} working tree changes`}>
+                                {isDirectory ? node.changeCount : <FileStatusBadge status={node.status} />}
+                              </span>
+                            )}
+                          </button>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuLabel className="max-w-64 truncate font-mono">{node.path}</ContextMenuLabel>
+                          <ContextMenuItem onSelect={() => (isDirectory ? toggleDirectory(node.path) : selectFile(node))}>
+                            <FolderOpen /> Open
+                          </ContextMenuItem>
+                          {!isDirectory && (
+                            <>
+                              <ContextMenuItem onSelect={() => copyText(node.path)}>
+                                <Copy /> Copy Path
+                              </ContextMenuItem>
+                              <ContextMenuItem onSelect={() => copyText(node.path)}>
+                                <Copy /> Copy Relative Path
+                              </ContextMenuItem>
+                              <ContextMenuSeparator />
+                              <ContextMenuItem onSelect={() => api.revealRepositoryFile?.({ repositoryPath: repoPath, path: node.path })}>
+                                <ExternalLink /> Reveal in File Manager
+                              </ContextMenuItem>
+                            </>
+                          )}
+                        </ContextMenuContent>
+                      </ContextMenu>
                     );
                   })}
                 </div>

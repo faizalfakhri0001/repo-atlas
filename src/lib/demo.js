@@ -405,6 +405,7 @@ export function createDemoApi() {
     platform: "demo",
     openRepository: () => Promise.resolve("/demo/acme-storefront"),
     revealRepository: () => Promise.resolve({ ok: true }),
+    revealRepositoryFile: () => Promise.resolve({ ok: true }),
     scanRepository: () => ok(scanData()),
     listRepositoryFiles: () => ok(demoFiles),
     readRepositoryFile: ({ path: filePath } = {}) => {

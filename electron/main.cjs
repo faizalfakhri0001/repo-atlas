@@ -4,6 +4,7 @@ const {
   scanRepository,
   listRepositoryFiles,
   readRepositoryFile,
+  resolveRepositoryFilePath,
   listCommits,
   getCommitDetails,
   getFileDiff,
@@ -82,6 +83,11 @@ function registerIpcHandlers() {
     "repository:scan": (payload) => scanRepository(payload?.repositoryPath ?? payload),
     "repository:list-files": (payload) => listRepositoryFiles(payload?.repositoryPath ?? payload),
     "repository:file-content": (payload) => readRepositoryFile(payload?.repositoryPath, payload?.path),
+    "repository:reveal-file": async (payload) => {
+      const target = await resolveRepositoryFilePath(payload?.repositoryPath, payload?.path);
+      shell.showItemInFolder(target);
+      return null;
+    },
     "commits:list": (payload) => listCommits(payload?.repositoryPath, payload ?? {}),
     "commit:details": (payload) => getCommitDetails(payload?.repositoryPath, payload?.hash),
     "diff:file": (payload) => getFileDiff(payload?.repositoryPath, payload ?? {}),
