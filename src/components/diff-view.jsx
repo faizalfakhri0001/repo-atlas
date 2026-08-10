@@ -4,54 +4,23 @@ import { api } from "@/lib/api";
 import { cn, copyText } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { parseUnifiedDiff } from "@/features/diff/diff-parser";
 
-export function parseUnifiedDiff(text) {
-  const hunks = [];
-  const meta = [];
-  let current = null;
-  let oldNo = 0;
-  let newNo = 0;
-
-  for (const line of (text ?? "").split("\n")) {
-    if (line.startsWith("@@")) {
-      const match = line.match(/^@@+ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@+(.*)$/);
-      oldNo = Number(match?.[1] ?? 1);
-      newNo = Number(match?.[3] ?? 1);
-      current = { header: line, context: match?.[5]?.trim() ?? "", lines: [] };
-      hunks.push(current);
-      continue;
-    }
-    if (!current) {
-      if (line) meta.push(line);
-      continue;
-    }
-    const marker = line[0];
-    if (marker === "+") {
-      current.lines.push({ type: "add", oldNo: null, newNo: newNo++, text: line.slice(1) });
-    } else if (marker === "-") {
-      current.lines.push({ type: "del", oldNo: oldNo++, newNo: null, text: line.slice(1) });
-    } else if (marker === "\\") {
-      current.lines.push({ type: "note", oldNo: null, newNo: null, text: line });
-    } else {
-      current.lines.push({ type: "ctx", oldNo: oldNo++, newNo: newNo++, text: line.slice(1) });
-    }
-  }
-  return { hunks, meta };
-}
+export { parseUnifiedDiff } from "@/features/diff/diff-parser";
 
 const LINE_STYLE = {
   add: "bg-emerald-500/10",
-  del: "bg-rose-500/10",
-  ctx: "",
+  delete: "bg-rose-500/10",
+  context: "",
   note: "opacity-60",
 };
 const MARKER_STYLE = {
   add: "text-emerald-500",
-  del: "text-rose-500",
-  ctx: "text-transparent",
+  delete: "text-rose-500",
+  context: "text-transparent",
   note: "text-muted-foreground",
 };
-const MARKER_CHAR = { add: "+", del: "-", ctx: " ", note: " " };
+const MARKER_CHAR = { add: "+", delete: "-", context: " ", note: " " };
 
 /**
  * Fetches and renders one file's unified diff.
@@ -139,10 +108,10 @@ export function DiffView({ repoPath, request, className, maxHeight }) {
               {lines.map((line, lineIndex) => (
                 <div key={lineIndex} className={cn("flex", LINE_STYLE[line.type])}>
                   <span className="w-11 shrink-0 select-none border-r border-border/40 pr-2 text-right tabular-nums text-muted-foreground/60">
-                    {line.oldNo ?? ""}
+                    {line.oldLine ?? ""}
                   </span>
                   <span className="w-11 shrink-0 select-none border-r border-border/40 pr-2 text-right tabular-nums text-muted-foreground/60">
-                    {line.newNo ?? ""}
+                    {line.newLine ?? ""}
                   </span>
                   <span className={cn("w-5 shrink-0 select-none text-center font-semibold", MARKER_STYLE[line.type])}>
                     {MARKER_CHAR[line.type]}
