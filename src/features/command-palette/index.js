@@ -8,6 +8,7 @@ export {
 export { MAX_COMMAND_RESULTS, rankCommands, scoreCommand, scoreText, searchCommands } from "./command-search.js";
 export { createNavigationCommands } from "./navigation-commands.js";
 export { createRepositoryCommands } from "./repository-commands.js";
+export { createFileCommands } from "./file-commands.js";
 export { CommandPalette, formatCommandShortcut } from "./CommandPalette.jsx";
 export { useCommandPalette } from "./use-command-palette.js";
 export { findShortcutCommand, shortcutMatches, useCommandPaletteShortcuts } from "./command-shortcuts.js";
