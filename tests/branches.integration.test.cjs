@@ -39,6 +39,12 @@ test("branch intelligence reports ahead and behind counts against the current de
   await git("commit", "-m", "Add ahead change");
   await git("checkout", "main");
   await git("branch", "feature/behind", "main~1");
+  await git("branch", "feature/gone", "main");
+  await git("remote", "add", "origin", "/tmp/repo-atlas-missing-remote.git");
+  const goneHash = (await git("rev-parse", "feature/gone")).stdout.trim();
+  await git("update-ref", "refs/remotes/origin/feature/gone", goneHash);
+  await git("branch", "--set-upstream-to=origin/feature/gone", "feature/gone");
+  await git("update-ref", "-d", "refs/remotes/origin/feature/gone");
 
   const result = await branchIntelligence(root);
   const ahead = result.branches.find((branch) => branch.name === "feature/ahead");
@@ -58,4 +64,7 @@ test("branch intelligence reports ahead and behind counts against the current de
   const merged = result.branches.find((branch) => branch.name === "feature/merged");
   assert.equal(merged.mergedIntoDefault, true);
   assert.equal(merged.status, "merged");
+  const gone = result.branches.find((branch) => branch.name === "feature/gone");
+  assert.equal(gone.goneUpstream, true);
+  assert.equal(gone.status, "gone");
 });
