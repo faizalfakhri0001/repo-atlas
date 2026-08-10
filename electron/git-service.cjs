@@ -1,6 +1,6 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
+const { execFile } = require("node:child_process");
 const {
   GitServiceError,
   runGit,
@@ -714,66 +714,44 @@ function runGitInput(cwd, args, input, { timeout = 30_000, maxOutputBytes = 2 * 
   }
 
   return new Promise((resolve, reject) => {
-    const child = spawn("git", args, {
-      cwd,
-      windowsHide: true,
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: "0",
-        GCM_INTERACTIVE: "Never",
-        LC_ALL: "C",
+    const child = execFile(
+      "git",
+      args,
+      {
+        cwd,
+        windowsHide: true,
+        shell: false,
+        timeout,
+        maxBuffer: maxOutputBytes,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          GIT_TERMINAL_PROMPT: "0",
+          GCM_INTERACTIVE: "Never",
+          LC_ALL: "C",
+        },
       },
-    });
-    let stdout = "";
-    let stderr = "";
-    let settled = false;
-    let timer = null;
-
-    const finishError = (error) => {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      reject(error);
-    };
-
-    const appendOutput = (target, chunk) => {
-      const next = target + chunk.toString();
-      if (Buffer.byteLength(next, "utf8") > maxOutputBytes) {
-        child.kill();
-        finishError(new GitServiceError("Git returned too much patch output.", "GIT_OUTPUT_LIMIT"));
-        return target;
-      }
-      return next;
-    };
-
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      stdout = appendOutput(stdout, chunk);
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr = appendOutput(stderr, chunk);
-    });
-    child.stdin.on("error", (error) => {
-      if (error?.code !== "EPIPE") finishError(new GitServiceError(error?.message || "Git patch input failed.", "GIT_COMMAND_FAILED"));
-    });
-    child.on("error", (error) => {
-      if (error?.code === "ENOENT") {
-        finishError(new GitServiceError("Git executable was not found. Install Git and ensure it is available in PATH.", "GIT_NOT_FOUND"));
-        return;
-      }
-      finishError(new GitServiceError(error?.message || "Git patch operation failed.", "GIT_COMMAND_FAILED"));
-    });
-    child.on("close", (code, signal) => {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      resolve({ stdout: stdout.trimEnd(), stderr: stderr.trimEnd(), code, signal, failed: code !== 0 });
-    });
-    timer = setTimeout(() => {
-      child.kill();
-      finishError(new GitServiceError("Git patch operation timed out.", "GIT_TIMEOUT"));
-    }, timeout);
+      (error, stdout = "", stderr = "") => {
+        if (error?.code === "ENOENT") {
+          reject(new GitServiceError("Git executable was not found. Install Git and ensure it is available in PATH.", "GIT_NOT_FOUND"));
+          return;
+        }
+        if (error?.killed || error?.signal) {
+          reject(new GitServiceError("Git patch operation timed out.", "GIT_TIMEOUT", stderr));
+          return;
+        }
+        if (error?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+          reject(new GitServiceError("Git returned too much patch output.", "GIT_OUTPUT_LIMIT"));
+          return;
+        }
+        resolve({
+          stdout: String(stdout).trimEnd(),
+          stderr: String(stderr).trimEnd(),
+          code: typeof error?.code === "number" ? error.code : 0,
+          failed: Boolean(error),
+        });
+      },
+    );
     child.stdin.end(String(input ?? ""));
   });
 }
