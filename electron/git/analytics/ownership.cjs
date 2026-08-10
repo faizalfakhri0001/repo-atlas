@@ -99,6 +99,50 @@ function mergeFileAnalytics(target, file) {
   return target;
 }
 
+function createDirectoryOwnership(directoryPath) {
+  return {
+    path: directoryPath,
+    type: "directory",
+    totalCommits: 0,
+    totalChurn: 0,
+    additions: 0,
+    deletions: 0,
+    firstSeenAt: null,
+    lastChangedAt: null,
+    fileCount: 0,
+    contributors: new Map(),
+  };
+}
+
+function directoryAncestors(filePath) {
+  const ancestors = [];
+  let directory = filePath.slice(0, filePath.lastIndexOf("/"));
+  while (true) {
+    ancestors.push(directory);
+    if (!directory) break;
+    const separator = directory.lastIndexOf("/");
+    directory = separator < 0 ? "" : directory.slice(0, separator);
+  }
+  return ancestors;
+}
+
+function aggregateDirectoryOwnership(files) {
+  const directories = new Map();
+  for (const file of mapValues(files)) {
+    if (!file?.path) continue;
+    for (const directoryPath of directoryAncestors(file.path)) {
+      let directory = directories.get(directoryPath);
+      if (!directory) {
+        directory = createDirectoryOwnership(directoryPath);
+        directories.set(directoryPath, directory);
+      }
+      directory.fileCount += 1;
+      mergeFileAnalytics(directory, file);
+    }
+  }
+  return directories;
+}
+
 /**
  * Aggregate all-time file ownership from the shared analytics index. The
  * function only uses historical index data and never reads the working tree.
@@ -119,9 +163,12 @@ module.exports = {
   MAX_OWNERSHIP_LIMIT,
   OWNERSHIP_PERIODS,
   aggregateFileOwnership,
+  aggregateDirectoryOwnership,
   contributorKey,
+  createDirectoryOwnership,
   createContributor,
   createFileOwnership,
+  directoryAncestors,
   finiteNumber,
   mapValues,
   mergeContributor,

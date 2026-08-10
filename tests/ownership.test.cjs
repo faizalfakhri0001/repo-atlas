@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  aggregateDirectoryOwnership,
   aggregateFileOwnership,
   contributorKey,
   normalizeOwnershipPeriod,
@@ -38,4 +39,22 @@ test("aggregateFileOwnership normalizes author identities and preserves raw acti
   assert.equal(contributorKey({ name: "Faizal", email: "FAIZAL@EXAMPLE.TEST" }), "email:faizal@example.test");
   assert.equal(normalizeOwnershipPeriod("unknown"), "all");
   assert.equal(normalizeOwnershipPeriod("12m"), "12m");
+});
+
+test("aggregateDirectoryOwnership sums every file into each ancestor directory", () => {
+  const files = aggregateFileOwnership({
+    files: new Map([
+      ["src/components/a.jsx", { path: "src/components/a.jsx", commits: 2, additions: 5, deletions: 1, authors: new Map([["email:ada@example.test", { name: "Ada", email: "ada@example.test", commits: 2, additions: 5, deletions: 1 }]]) }],
+      ["src/components/b.jsx", { path: "src/components/b.jsx", commits: 1, additions: 2, deletions: 0, authors: new Map([["email:grace@example.test", { name: "Grace", email: "grace@example.test", commits: 1, additions: 2, deletions: 0 }]]) }],
+      ["src/index.js", { path: "src/index.js", commits: 3, additions: 3, deletions: 2, authors: new Map([["email:ada@example.test", { name: "Ada", email: "ada@example.test", commits: 3, additions: 3, deletions: 2 }]]) }],
+    ]),
+  });
+  const directories = aggregateDirectoryOwnership(files);
+
+  assert.equal(directories.get("src/components").fileCount, 2);
+  assert.equal(directories.get("src/components").totalCommits, 3);
+  assert.equal(directories.get("src/components").totalChurn, 8);
+  assert.equal(directories.get("src").fileCount, 3);
+  assert.equal(directories.get("").fileCount, 3);
+  assert.equal(directories.get("src/components").contributors.size, 2);
 });
