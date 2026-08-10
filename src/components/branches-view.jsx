@@ -95,6 +95,78 @@ function DefaultDistance({ branch }) {
   );
 }
 
+function DivergenceBar({ branch, direction, value, maximum, defaultBranch }) {
+  const label = direction === "ahead" ? "Ahead" : "Behind";
+  const tone = direction === "ahead" ? "bg-emerald-500/80" : "bg-amber-500/80";
+  const width = value > 0 ? Math.max(6, (value / Math.max(maximum, 1)) * 100) : 0;
+  const tooltip = [
+    `${branch.name}: ${value} ${label.toLowerCase()} of ${defaultBranch || "default"}`,
+    `Merge base: ${branch.mergeBase || "unavailable"}`,
+    `Last activity: ${formatRelativeDate(branch.lastCommitAt)}`,
+    `Upstream: ${branch.upstream || "none"}`,
+  ].join(" · ");
+
+  return (
+    <div className="flex items-center gap-2" title={tooltip}>
+      <span className="w-16 shrink-0 text-[11px] text-muted-foreground">{label}</span>
+      <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted/50">
+        <div className={cn("h-full rounded-full transition-[width]", tone)} style={{ width: `${width}%` }} />
+      </div>
+      <span className="w-8 text-right text-xs font-medium tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function DivergenceView({ branches, defaultBranch }) {
+  const localBranches = branches.filter((branch) => !branch.remote);
+  const analyzedBranches = localBranches.filter((branch) => branch.analyzed && branch.aheadOfDefault != null && branch.behindDefault != null);
+  const maxAhead = Math.max(1, ...analyzedBranches.map((branch) => branch.aheadOfDefault));
+  const maxBehind = Math.max(1, ...analyzedBranches.map((branch) => branch.behindDefault));
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between rounded-lg border border-border/60 bg-card/50 px-4 py-3 text-xs">
+        <span className="text-muted-foreground">Divergence from <strong className="font-medium text-foreground">{defaultBranch || "the default branch"}</strong></span>
+        <span className="text-muted-foreground">Independent scales · {analyzedBranches.length} analyzed</span>
+      </div>
+      {analyzedBranches.length === 0 ? (
+        <div className="rounded-xl border border-border p-12 text-center text-sm text-muted-foreground">
+          Branch divergence is not available yet.
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-border">
+          <div className="grid grid-cols-[minmax(180px,0.8fr)_minmax(260px,1fr)_minmax(260px,1fr)] gap-4 border-b border-border bg-card px-4 py-2.5 text-xs text-muted-foreground">
+            <span>Branch</span>
+            <span>Behind {defaultBranch || "default"}</span>
+            <span>Ahead {defaultBranch || "default"}</span>
+          </div>
+          <div>
+            {analyzedBranches.map((branch) => (
+              <div key={branch.ref} className="grid grid-cols-[minmax(180px,0.8fr)_minmax(260px,1fr)_minmax(260px,1fr)] gap-4 border-b border-border/60 px-4 py-3 last:border-0 hover:bg-accent/25">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 truncate">
+                    <GitBranch className={cn("size-4 shrink-0", branch.current ? "text-primary" : "text-muted-foreground")} />
+                    <span className={cn("truncate text-sm font-medium", branch.current && "text-primary")}>{branch.name}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <StatusBadge status={branch.status} />
+                    <span className="text-[11px] text-muted-foreground">{formatRelativeDate(branch.lastCommitAt)}</span>
+                  </div>
+                </div>
+                <DivergenceBar branch={branch} direction="behind" value={branch.behindDefault} maximum={maxBehind} defaultBranch={defaultBranch} />
+                <DivergenceBar branch={branch} direction="ahead" value={branch.aheadOfDefault} maximum={maxAhead} defaultBranch={defaultBranch} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {branches.some((branch) => branch.remote) && (
+        <p className="text-[11px] text-muted-foreground">Remote refs are available in List view.</p>
+      )}
+    </div>
+  );
+}
+
 export function BranchesView({
   repoPath,
   branches = [],
@@ -106,6 +178,7 @@ export function BranchesView({
 }) {
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState("all");
+  const [viewMode, setViewMode] = useState("list");
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(Boolean(repoPath));
   const [error, setError] = useState(null);
@@ -187,6 +260,12 @@ export function BranchesView({
             <TabsTrigger value="remote">Remote {remoteCount}</TabsTrigger>
           </TabsList>
         </Tabs>
+        <Tabs value={viewMode} onValueChange={setViewMode}>
+          <TabsList>
+            <TabsTrigger value="list">List</TabsTrigger>
+            <TabsTrigger value="divergence">Divergence</TabsTrigger>
+          </TabsList>
+        </Tabs>
         <div className="relative w-64">
           <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input aria-label="Filter branches" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter branches" className="h-8 pl-8 text-xs" />
@@ -200,6 +279,9 @@ export function BranchesView({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-4">
+        {viewMode === "divergence" ? (
+          <DivergenceView branches={filtered} defaultBranch={reportDefaultBranch} />
+        ) : (
         <div className="overflow-hidden rounded-xl border border-border">
           <table className="w-full min-w-[1120px] text-left text-sm">
             <thead className="sticky top-0 z-[1] bg-card text-xs text-muted-foreground">
@@ -303,6 +385,7 @@ export function BranchesView({
           </table>
           {filtered.length === 0 && <div className="p-12 text-center text-sm text-muted-foreground">No branches match the filter.</div>}
         </div>
+        )}
       </div>
     </div>
   );
