@@ -15,6 +15,7 @@ import {
   GitCommitHorizontal,
   GitCompareArrows,
   HardDrive,
+  HeartPulse,
   LayoutDashboard,
   LoaderCircle,
   Moon,
@@ -41,6 +42,7 @@ import { WorkspaceView } from "@/features/workspace";
 import { FileExplorer } from "@/features/files";
 import { HotspotsView } from "@/features/hotspots";
 import { OwnershipView } from "@/features/ownership";
+import { HealthView } from "@/features/health";
 import { GlobalSearch } from "@/features/search";
 import { CherryPickDialog } from "@/components/cherry-pick-dialog";
 import { StateBanner } from "@/features/repository";
@@ -58,6 +60,7 @@ import { cn, formatRelativeDate, truncateMiddle } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "health", label: "Health", icon: HeartPulse },
   { id: "commits", label: "Commits", icon: GitCommitHorizontal },
   { id: "files", label: "Files", icon: Files },
   { id: "hotspots", label: "Hotspots", icon: Flame },
@@ -448,6 +451,7 @@ function ViewHost({
         <CompareView data={data} initial={compareInit} onCherryPick={onCherryPick} />
       </div>
       {view === "overview" && <Overview data={data} onOpenCommit={onFocusCommit} onOpenHealth={() => onNavigate("health")} />}
+      {view === "health" && <HealthView repoPath={data.repository.rootPath} revision={data.scannedAt} onNavigate={onNavigate} />}
       {view === "branches" && (
         <BranchesView
           repoPath={data.repository.rootPath}
