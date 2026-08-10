@@ -94,4 +94,19 @@ describe("FileHistory", () => {
     expect(await screen.findByText("export const account = true;")).toBeInTheDocument();
     expect(readFileAtRevision).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository", hash: "b".repeat(40), path: "src/domain/account.js" });
   });
+
+  it("loads the next page without replacing the existing entries", async () => {
+    fileHistory
+      .mockResolvedValueOnce({ ok: true, data: { currentPath: "src/domain/account.js", entries: [entries[0]], hasMore: true } })
+      .mockResolvedValueOnce({ ok: true, data: { currentPath: "src/domain/account.js", entries: [entries[1]], hasMore: false } });
+    const user = userEvent.setup();
+    render(<HistoryHarness />);
+
+    expect(await screen.findByText("Update account")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByText("Rename user module")).toBeInTheDocument();
+    expect(screen.getByText("Update account")).toBeInTheDocument();
+    expect(fileHistory).toHaveBeenLastCalledWith({ repositoryPath: "/workspace/repository", path: "src/domain/account.js", limit: 200, skip: 1 });
+  });
 });
