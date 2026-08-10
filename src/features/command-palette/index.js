@@ -10,3 +10,4 @@ export { createNavigationCommands } from "./navigation-commands.js";
 export { createRepositoryCommands } from "./repository-commands.js";
 export { CommandPalette, formatCommandShortcut } from "./CommandPalette.jsx";
 export { useCommandPalette } from "./use-command-palette.js";
+export { findShortcutCommand, shortcutMatches, useCommandPaletteShortcuts } from "./command-shortcuts.js";
