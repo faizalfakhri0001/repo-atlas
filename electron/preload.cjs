@@ -17,5 +17,6 @@ contextBridge.exposeInMainWorld("repoAtlas", {
   cherryPickExecute: (payload) => ipcRenderer.invoke("cherry-pick:execute", payload),
   sequencerAction: (payload) => ipcRenderer.invoke("sequencer:action", payload),
   repositorySearch: (payload) => ipcRenderer.invoke("repository:search", payload),
+  analyticsSummary: (payload) => ipcRenderer.invoke("analytics:summary", payload),
   platform: process.platform,
 });

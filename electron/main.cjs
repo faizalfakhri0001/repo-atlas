@@ -15,6 +15,7 @@ const {
   cherryPickExecute,
   sequencerAction,
   searchRepository,
+  analyticsSummary,
   GitServiceError,
 } = require("./git-service.cjs");
 
@@ -101,6 +102,7 @@ function registerIpcHandlers() {
     "cherry-pick:execute": (payload) => cherryPickExecute(payload?.repositoryPath, payload?.hashes),
     "sequencer:action": (payload) => sequencerAction(payload?.repositoryPath, payload?.action),
     "repository:search": (payload) => searchRepository(payload?.repositoryPath, payload ?? {}),
+    "analytics:summary": (payload) => analyticsSummary(payload?.repositoryPath, payload ?? {}),
   };
 
   for (const [channel, task] of Object.entries(invokeHandlers)) {

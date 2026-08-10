@@ -16,6 +16,7 @@ const { listRepositoryFiles, parseRepositoryFileList, readRepositoryFile } = req
 const { listFileHistory } = require("./git/history.cjs");
 const { readFileAtRevision } = require("./git/revisions.cjs");
 const { searchRepository } = require("./git/search.cjs");
+const { getAnalyticsIndex, serializeAnalyticsIndex } = require("./git/analytics/index.cjs");
 
 const DEFAULT_COMMIT_LIMIT = 1000;
 const MAX_COMMIT_LIMIT = 5000;
@@ -563,6 +564,11 @@ async function getFileDiff(repositoryPath, options = {}) {
   };
 }
 
+async function analyticsSummary(repositoryPath, options = {}) {
+  const index = await getAnalyticsIndex(repositoryPath, options);
+  return serializeAnalyticsIndex(index, options);
+}
+
 function parseMergeTreeConflicts(result) {
   if (result.code === 0) {
     return { status: "clean", files: [] };
@@ -994,6 +1000,7 @@ module.exports = {
   listCommits,
   getCommitDetails,
   getFileDiff,
+  analyticsSummary,
   compareRefs,
   cherryPickPreview,
   cherryPickExecute,

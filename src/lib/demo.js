@@ -269,6 +269,85 @@ function fakeDiff(filePath, additions, deletions) {
   return lines.join("\n");
 }
 
+function createDemoAnalyticsSummary(commits, mainTip, options = {}) {
+  const maxCommits = Math.min(50_000, Math.max(1, Math.floor(Number(options.maxCommits) || 10_000)));
+  const limit = Math.min(100, Math.max(1, Math.floor(Number(options.limit) || 100)));
+  const selected = commits.slice(0, maxCommits);
+  const files = new Map();
+  const authors = new Map();
+  let additions = 0;
+  let deletions = 0;
+
+  const later = (current, candidate) => (!current || candidate > current ? candidate : current);
+  const earlier = (current, candidate) => (!current || candidate < current ? candidate : current);
+
+  for (const commit of selected) {
+    const name = String(commit.author ?? "").trim() || "Unknown author";
+    const email = String(commit.email ?? "").trim().toLowerCase();
+    const key = email ? `email:${email}` : `name:${name.toLowerCase()}`;
+    let author = authors.get(key);
+    if (!author) {
+      author = { key, name, email, aliases: new Set(), commits: 0, additions: 0, deletions: 0, churn: 0, lastChangedAt: null };
+      authors.set(key, author);
+    }
+    author.aliases.add(name);
+    author.commits += 1;
+    author.lastChangedAt = later(author.lastChangedAt, commit.date);
+
+    for (const change of filesForCommit(commit)) {
+      let file = files.get(change.path);
+      if (!file) {
+        file = { path: change.path, commits: 0, additions: 0, deletions: 0, churn: 0, firstSeenAt: null, lastChangedAt: null, authors: new Map() };
+        files.set(change.path, file);
+      }
+      file.commits += 1;
+      file.additions += change.additions;
+      file.deletions += change.deletions;
+      file.churn += change.additions + change.deletions;
+      file.firstSeenAt = earlier(file.firstSeenAt, commit.date);
+      file.lastChangedAt = later(file.lastChangedAt, commit.date);
+      let fileAuthor = file.authors.get(key);
+      if (!fileAuthor) {
+        fileAuthor = { key, name, email, commits: 0, additions: 0, deletions: 0, churn: 0, lastChangedAt: null };
+        file.authors.set(key, fileAuthor);
+      }
+      fileAuthor.commits += 1;
+      fileAuthor.additions += change.additions;
+      fileAuthor.deletions += change.deletions;
+      fileAuthor.churn += change.additions + change.deletions;
+      fileAuthor.lastChangedAt = later(fileAuthor.lastChangedAt, commit.date);
+      author.additions += change.additions;
+      author.deletions += change.deletions;
+      author.churn += change.additions + change.deletions;
+      additions += change.additions;
+      deletions += change.deletions;
+    }
+  }
+
+  const sortValues = (left, right) => right.churn - left.churn || right.commits - left.commits || left.path?.localeCompare(right.path ?? "") || left.name?.localeCompare(right.name ?? "");
+  const serializedFiles = [...files.values()].sort(sortValues).slice(0, limit).map((file) => ({
+    ...file,
+    authors: [...file.authors.values()].sort(sortValues).slice(0, limit),
+  }));
+  const serializedAuthors = [...authors.values()].sort(sortValues).slice(0, limit).map((author) => ({ ...author, aliases: [...author.aliases] }));
+
+  return {
+    repositoryKey: "/demo/acme-storefront",
+    head: mainTip,
+    generatedAt: new Date().toISOString(),
+    scope: {
+      maxCommits,
+      maxFilesPerCommit: 5_000,
+      processedCommits: selected.length,
+      truncated: commits.length > maxCommits,
+      filesTruncated: false,
+    },
+    totals: { commits: selected.length, files: files.size, additions, deletions },
+    files: serializedFiles,
+    authors: serializedAuthors,
+  };
+}
+
 export function createDemoApi() {
   const dataset = buildDataset();
   const { commits, byHash, branchTips, tags } = dataset;
@@ -522,6 +601,7 @@ export function createDemoApi() {
     revealRepository: () => Promise.resolve({ ok: true }),
     revealRepositoryFile: () => Promise.resolve({ ok: true }),
     scanRepository: () => ok(scanData()),
+    analyticsSummary: (payload = {}) => ok(createDemoAnalyticsSummary(commits, mainTip, payload)),
     repositorySearch: (payload) => ok(searchDemoRepository(payload)),
     listRepositoryFiles: () => ok(demoFiles),
     readRepositoryFile: ({ path: filePath } = {}) => {

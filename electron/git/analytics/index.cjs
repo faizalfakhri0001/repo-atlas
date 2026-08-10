@@ -178,6 +178,53 @@ function createAnalyticsIndex(repository, head, refsFingerprint, scope, commits)
   };
 }
 
+function sortAnalyticsValues(left, right) {
+  return right.churn - left.churn || right.commits - left.commits || left.path?.localeCompare(right.path ?? "") || left.name?.localeCompare(right.name ?? "");
+}
+
+function serializeFileAnalytics(file, limit) {
+  return {
+    path: file.path,
+    commits: file.commits,
+    additions: file.additions,
+    deletions: file.deletions,
+    churn: file.churn,
+    firstSeenAt: file.firstSeenAt,
+    lastChangedAt: file.lastChangedAt,
+    authors: [...file.authors.values()]
+      .sort(sortAnalyticsValues)
+      .slice(0, limit)
+      .map((author) => ({ ...author })),
+  };
+}
+
+function serializeAuthorAnalytics(author) {
+  return {
+    key: author.key,
+    name: author.name,
+    email: author.email,
+    aliases: [...author.aliases],
+    commits: author.commits,
+    additions: author.additions,
+    deletions: author.deletions,
+    churn: author.churn,
+    lastChangedAt: author.lastChangedAt,
+  };
+}
+
+function serializeAnalyticsIndex(index, options = {}) {
+  const limit = Math.min(100, Math.max(1, Math.floor(Number(options.limit) || 100)));
+  return {
+    repositoryKey: index.repositoryKey,
+    head: index.head,
+    generatedAt: index.generatedAt,
+    scope: { ...index.scope },
+    totals: { ...index.totals },
+    files: [...index.files.values()].sort(sortAnalyticsValues).slice(0, limit).map((file) => serializeFileAnalytics(file, limit)),
+    authors: [...index.authors.values()].sort(sortAnalyticsValues).slice(0, limit).map(serializeAuthorAnalytics),
+  };
+}
+
 async function readRepositoryRevision(repositoryRoot) {
   const result = await runGit(repositoryRoot, ["rev-parse", "--verify", "--quiet", "HEAD"], { allowFailure: true });
   return result.failed ? "" : result.stdout.trim();
@@ -298,4 +345,5 @@ module.exports = {
   invalidateAnalyticsCache,
   readRefsFingerprint,
   readRepositoryRevision,
+  serializeAnalyticsIndex,
 };
