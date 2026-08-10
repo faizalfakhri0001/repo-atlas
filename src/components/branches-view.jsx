@@ -19,6 +19,20 @@ const STATUS_VARIANTS = {
   gone: "destructive",
 };
 
+const STATUS_FILTERS = [
+  ["all", "All"],
+  ["current", "Current"],
+  ["ahead", "Ahead"],
+  ["behind", "Behind"],
+  ["diverged", "Diverged"],
+  ["stale", "Stale"],
+  ["merged", "Merged"],
+  ["gone", "Gone"],
+  ["remote", "Remote"],
+];
+
+const STATUS_ORDER = { current: 0, gone: 1, merged: 2, stale: 3, diverged: 4, behind: 5, ahead: 6, healthy: 7 };
+
 function normalizeBranch(branch, currentBranch, defaultBranch) {
   const current = Boolean(branch.current || (!branch.remote && branch.name === currentBranch));
   const aheadOfUpstream = branch.aheadOfUpstream ?? branch.ahead ?? 0;
@@ -177,7 +191,8 @@ export function BranchesView({
   onCompareWithDefault,
 }) {
   const [query, setQuery] = useState("");
-  const [scope, setScope] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("name");
   const [viewMode, setViewMode] = useState("list");
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(Boolean(repoPath));
@@ -225,18 +240,36 @@ export function BranchesView({
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     let list = normalizedBranches;
-    if (scope === "local") list = list.filter((branch) => !branch.remote);
-    if (scope === "remote") list = list.filter((branch) => branch.remote);
+    if (statusFilter === "remote") list = list.filter((branch) => branch.remote);
+    else if (statusFilter !== "all") list = list.filter((branch) => !branch.remote && branch.status === statusFilter);
     if (normalized) {
       list = list.filter((branch) =>
         [branch.name, branch.upstream, branch.author, branch.subject, branch.hash, branch.status].join(" ").toLowerCase().includes(normalized),
       );
     }
-    return [...list].sort((left, right) => Number(right.current) - Number(left.current) || left.name.localeCompare(right.name));
-  }, [normalizedBranches, query, scope]);
+    return [...list].sort((left, right) => {
+      if (sortBy === "activity") {
+        return new Date(right.lastCommitAt || 0).getTime() - new Date(left.lastCommitAt || 0).getTime() || left.name.localeCompare(right.name);
+      }
+      if (sortBy === "ahead") {
+        return (right.aheadOfDefault ?? -1) - (left.aheadOfDefault ?? -1) || left.name.localeCompare(right.name);
+      }
+      if (sortBy === "behind") {
+        return (right.behindDefault ?? -1) - (left.behindDefault ?? -1) || left.name.localeCompare(right.name);
+      }
+      if (sortBy === "status") {
+        return (STATUS_ORDER[left.status] ?? 99) - (STATUS_ORDER[right.status] ?? 99) || left.name.localeCompare(right.name);
+      }
+      return Number(right.current) - Number(left.current) || left.name.localeCompare(right.name);
+    });
+  }, [normalizedBranches, query, sortBy, statusFilter]);
 
-  const localCount = normalizedBranches.filter((branch) => !branch.remote).length;
   const remoteCount = normalizedBranches.filter((branch) => branch.remote).length;
+  const filterCount = (filter) => {
+    if (filter === "all") return normalizedBranches.length;
+    if (filter === "remote") return remoteCount;
+    return normalizedBranches.filter((branch) => !branch.remote && branch.status === filter).length;
+  };
   const scopeMessage = report?.scope?.truncated
     ? `Showing intelligence for the ${report.scope.limit} most recently active local branches.`
     : report
@@ -253,23 +286,38 @@ export function BranchesView({
             {report?.defaultBranchSource ? ` · ${report.defaultBranchSource} source` : ""}
           </p>
         </div>
-        <Tabs value={scope} onValueChange={setScope}>
-          <TabsList>
-            <TabsTrigger value="all">All {normalizedBranches.length}</TabsTrigger>
-            <TabsTrigger value="local">Local {localCount}</TabsTrigger>
-            <TabsTrigger value="remote">Remote {remoteCount}</TabsTrigger>
-          </TabsList>
-        </Tabs>
         <Tabs value={viewMode} onValueChange={setViewMode}>
           <TabsList>
             <TabsTrigger value="list">List</TabsTrigger>
             <TabsTrigger value="divergence">Divergence</TabsTrigger>
           </TabsList>
         </Tabs>
+        <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Sort</span>
+          <select aria-label="Sort branches" value={sortBy} onChange={(event) => setSortBy(event.target.value)} className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring">
+            <option value="name">Name</option>
+            <option value="activity">Last activity</option>
+            <option value="ahead">Ahead</option>
+            <option value="behind">Behind</option>
+            <option value="status">Status</option>
+          </select>
+        </label>
         <div className="relative w-64">
           <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input aria-label="Filter branches" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter branches" className="h-8 pl-8 text-xs" />
         </div>
+      </div>
+
+      <div className="shrink-0 overflow-x-auto border-b border-border/60 px-4 py-2">
+        <Tabs value={statusFilter} onValueChange={setStatusFilter}>
+          <TabsList className="h-auto min-w-max">
+            {STATUS_FILTERS.map(([value, label]) => (
+              <TabsTrigger key={value} value={value} className="h-7 px-2.5 text-xs">
+                {label} {filterCount(value)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
 
       <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
