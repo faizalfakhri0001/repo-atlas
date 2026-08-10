@@ -89,7 +89,7 @@ export function HealthSummaryCard({ repoPath, revision, onOpenDetails }) {
               <div className="text-4xl font-semibold tracking-tight tabular-nums">{state.data?.score ?? "—"}<span className="text-lg text-muted-foreground"> / 100</span></div>
               <div><HealthStatus grade={state.data?.grade} /><div className="mt-1 text-[11px] text-muted-foreground">Deterministic score with additive penalties</div></div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-2">
               {Object.entries(state.data?.categories ?? {}).map(([key, category]) => <CategoryStatus key={key} name={key} category={category} />)}
             </div>
             <Button variant="outline" onClick={() => onOpenDetails?.()}>

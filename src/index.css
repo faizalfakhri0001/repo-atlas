@@ -67,6 +67,30 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /*
+   * Desktop-first type scale: compact enough for dense repository data while
+   * preserving a clear reading floor for labels, controls, and code review.
+   * These semantic tokens keep every existing Tailwind text utility in step.
+   */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.125rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.375rem;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.1875rem;
+  --text-xl--line-height: 1.625rem;
+  --text-2xl: 1.375rem;
+  --text-2xl--line-height: 1.75rem;
+  --text-3xl: 1.75rem;
+  --text-3xl--line-height: 2.125rem;
+  --text-4xl: 2.125rem;
+  --text-4xl--line-height: 2.5rem;
+  --text-5xl: 2.625rem;
+  --text-5xl--line-height: 1;
 }
 
 * {
@@ -85,6 +109,8 @@ body {
   overflow: hidden;
   background: var(--background);
   color: var(--foreground);
+  font-size: 0.9375rem;
+  line-height: 1.375rem;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   text-rendering: optimizeLegibility;
