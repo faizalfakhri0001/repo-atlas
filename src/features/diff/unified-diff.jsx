@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { SyntaxLine } from "@/features/diff/syntax-line";
 
 const LINE_STYLE = {
   add: "bg-emerald-500/10",
@@ -25,18 +26,18 @@ export function DiffMeta({ meta }) {
   );
 }
 
-function DiffLine({ line, wrap }) {
+function DiffLine({ line, language, syntaxHighlight, wrap }) {
   return (
     <div className={cn("flex min-h-[19px]", LINE_STYLE[line.type])}>
       <span className="w-11 shrink-0 select-none border-r border-border/40 pr-2 text-right tabular-nums text-muted-foreground/60">{line.oldLine ?? ""}</span>
       <span className="w-11 shrink-0 select-none border-r border-border/40 pr-2 text-right tabular-nums text-muted-foreground/60">{line.newLine ?? ""}</span>
       <span className={cn("w-5 shrink-0 select-none text-center font-semibold", MARKER_STYLE[line.type])}>{MARKER_CHAR[line.type]}</span>
-      <code className={cn("pr-6", wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre")}>{line.text || " "}</code>
+      <SyntaxLine text={line.text} language={language} enabled={syntaxHighlight} wrap={wrap} />
     </div>
   );
 }
 
-export function UnifiedDiff({ meta = [], hunks = [], wrap = false }) {
+export function UnifiedDiff({ meta = [], hunks = [], language = "text", syntaxHighlight = true, wrap = false }) {
   return (
     <div className="min-w-fit font-mono text-[11.5px] leading-[19px]">
       <DiffMeta meta={meta} />
@@ -46,7 +47,7 @@ export function UnifiedDiff({ meta = [], hunks = [], wrap = false }) {
             <span className="font-mono">{hunk.header}</span>
             {hunk.context && <span className="truncate text-muted-foreground">{hunk.context}</span>}
           </div>
-          {hunk.lines.map((line, lineIndex) => <DiffLine key={`${line.type}-${lineIndex}`} line={line} wrap={wrap} />)}
+          {hunk.lines.map((line, lineIndex) => <DiffLine key={`${line.type}-${lineIndex}`} line={line} language={language} syntaxHighlight={syntaxHighlight} wrap={wrap} />)}
         </div>
       ))}
     </div>
