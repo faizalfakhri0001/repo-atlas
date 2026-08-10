@@ -65,6 +65,18 @@ function App() {
     if (activeSession?.path) loadRepository(activeSession.path, { refresh: true, sessionId: activeSession.id });
   }, [activeSession, loadRepository]);
 
+  const activateRepository = useCallback(
+    (sessionId) => {
+      const target = state.sessions.find((session) => session.id === sessionId);
+      if (!target) return;
+      actions.activateSession(sessionId);
+      if (target.path && ["created", "error", "stale"].includes(target.status)) {
+        void loadRepository(target.path, { sessionId: target.id });
+      }
+    },
+    [actions, loadRepository, state.sessions],
+  );
+
   const openCompare = useCallback(
     (base, head) => {
       actions.setCompareInit({ base, head, nonce: Date.now() });
@@ -99,8 +111,8 @@ function App() {
   const showWorkspace = useCallback(() => actions.setActiveView("workspace"), [actions]);
 
   const openRecentRepository = useCallback(
-    (repositoryPath) => (repositoryPath ? loadRepository(repositoryPath, { forceReload: true }) : handleOpen()),
-    [loadRepository],
+    (repositoryPath) => (repositoryPath ? loadRepository(repositoryPath) : handleOpen()),
+    [handleOpen, loadRepository],
   );
 
   const revealRecentRepository = useCallback((repositoryPath) => api.revealRepository(repositoryPath), []);
@@ -122,7 +134,7 @@ function App() {
       onFocusCommit={focusCommitInGraph}
       onShowWorkspace={showWorkspace}
       onClearCherryPick={() => actions.setCherryPick(null)}
-      onActivateRepository={actions.activateSession}
+      onActivateRepository={activateRepository}
       onCloseRepository={actions.closeRepository}
       onOpenRecent={openRecentRepository}
       onPinRecent={actions.pinRecent}

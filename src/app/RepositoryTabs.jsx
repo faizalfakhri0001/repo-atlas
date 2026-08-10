@@ -46,8 +46,11 @@ export function RepositoryTabs({
                   <AlertCircle className="size-3.5 shrink-0 text-amber-400" aria-label="Repository needs attention" />
                 ) : (
                   <Circle
-                    className={cn("size-2.5 shrink-0 fill-current", isDirty ? "text-amber-400" : "text-emerald-400")}
-                    aria-label={isDirty ? "Uncommitted changes" : "Clean working tree"}
+                    className={cn(
+                      "size-2.5 shrink-0 fill-current",
+                      repository ? (isDirty ? "text-amber-400" : "text-emerald-400") : "text-muted-foreground",
+                    )}
+                    aria-label={repository ? (isDirty ? "Uncommitted changes" : "Clean working tree") : "Not loaded"}
                   />
                 )}
                 <span className="min-w-0 flex-1 truncate font-medium">{truncateMiddle(session.name, 24, 6)}</span>
