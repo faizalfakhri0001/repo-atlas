@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld("repoAtlas", {
   ownership: (payload) => ipcRenderer.invoke("analytics:ownership", payload),
   repositoryHealth: (payload) => ipcRenderer.invoke("repository:health", payload),
   branchIntelligence: (payload) => ipcRenderer.invoke("branches:intelligence", payload),
+  getOperationMode: () => ipcRenderer.invoke("settings:get-operation-mode"),
+  setOperationMode: (payload) => ipcRenderer.invoke("settings:set-operation-mode", payload),
+  stageFiles: (payload) => ipcRenderer.invoke("workspace:stage-files", payload),
+  unstageFiles: (payload) => ipcRenderer.invoke("workspace:unstage-files", payload),
   onRepositoryChanged: (listener) => {
     if (typeof listener !== "function") return () => {};
     const wrapped = (_event, payload) => listener(payload);

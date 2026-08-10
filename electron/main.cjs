@@ -21,12 +21,16 @@ const {
   ownershipSummary,
   repositoryHealth,
   branchIntelligence,
+  stageFiles,
+  unstageFiles,
   refreshRepositoryPartial,
   GitServiceError,
 } = require("./git-service.cjs");
+const { createPreferencesStore } = require("./preferences.cjs");
 const { WatchManager } = require("./watch/watch-manager.cjs");
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
+const preferences = createPreferencesStore({ filePath: () => path.join(app.getPath("userData"), "preferences.json") });
 const watchManager = new WatchManager({
   onChange: (event) => {
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send("repository:changed", event);
@@ -131,6 +135,16 @@ function registerIpcHandlers() {
     "analytics:ownership": (payload) => ownershipSummary(payload?.repositoryPath, payload ?? {}),
     "repository:health": (payload) => repositoryHealth(payload?.repositoryPath, payload ?? {}),
     "branches:intelligence": (payload) => branchIntelligence(payload?.repositoryPath, payload ?? {}),
+    "settings:get-operation-mode": async () => ({ operationMode: await preferences.getOperationMode() }),
+    "settings:set-operation-mode": async (payload) => ({ operationMode: await preferences.setOperationMode(payload?.mode) }),
+    "workspace:stage-files": async (payload) => {
+      const operationMode = await preferences.getOperationMode();
+      return stageFiles(payload?.repositoryPath, payload?.paths, { operationMode });
+    },
+    "workspace:unstage-files": async (payload) => {
+      const operationMode = await preferences.getOperationMode();
+      return unstageFiles(payload?.repositoryPath, payload?.paths, { operationMode });
+    },
     "repository:refresh-partial": (payload) => refreshRepositoryPartial(payload?.repositoryPath, payload?.parts),
     "repository:watch-start": (payload) => watchManager.start({ sessionId: payload?.sessionId, repositoryPath: payload?.repositoryPath, mode: payload?.mode }),
     "repository:watch-stop": (payload) => watchManager.stop(payload?.sessionId),
