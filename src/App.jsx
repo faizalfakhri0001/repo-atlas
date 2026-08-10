@@ -117,6 +117,24 @@ function App() {
 
   const revealRecentRepository = useCallback((repositoryPath) => api.revealRepository(repositoryPath), []);
 
+  const locateMissingRepository = useCallback(
+    async (sessionId) => {
+      const repositoryPath = await api.openRepository();
+      if (!repositoryPath) return;
+      actions.closeRepository(sessionId);
+      await loadRepository(repositoryPath);
+    },
+    [actions, loadRepository],
+  );
+
+  const removeMissingRepository = useCallback(
+    (sessionId, repositoryPath) => {
+      actions.removeRecent(repositoryPath);
+      actions.closeRepository(sessionId);
+    },
+    [actions],
+  );
+
   return (
     <AppShell
       session={activeSession}
@@ -140,6 +158,8 @@ function App() {
       onPinRecent={actions.pinRecent}
       onRemoveRecent={actions.removeRecent}
       onRevealRecent={revealRecentRepository}
+      onLocateMissing={locateMissingRepository}
+      onRemoveMissing={removeMissingRepository}
     />
   );
 }

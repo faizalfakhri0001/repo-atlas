@@ -23,6 +23,7 @@ import {
 import { api, isDemo } from "@/lib/api";
 import { RepositoryTabs } from "@/app/RepositoryTabs";
 import { RecentRepositories } from "@/app/RecentRepositories";
+import { RepositoryRecovery } from "@/app/RepositoryRecovery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -71,6 +72,8 @@ export function AppShell({
   onPinRecent,
   onRemoveRecent,
   onRevealRecent,
+  onLocateMissing,
+  onRemoveMissing,
 }) {
   const data = session?.snapshot ?? null;
   const activeView = session?.activeView ?? "overview";
@@ -239,7 +242,15 @@ export function AppShell({
             {loading && !data ? (
               <LoadingState />
             ) : error && !data ? (
-              <ErrorState error={error} onOpen={onOpen} />
+              error.code === "PATH_NOT_FOUND" && session?.path ? (
+                <RepositoryRecovery
+                  repositoryPath={session.path}
+                  onLocate={() => onLocateMissing(session.id)}
+                  onRemove={() => onRemoveMissing(session.id, session.path)}
+                />
+              ) : (
+                <ErrorState error={error} onOpen={onOpen} />
+              )
             ) : !data ? (
               <RecentRepositories
                 repositories={recentRepositories}
