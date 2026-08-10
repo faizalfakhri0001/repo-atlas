@@ -77,7 +77,7 @@ test("branch intelligence reports ahead and behind counts against the current de
   assert.equal(diverged.status, "diverged");
 });
 
-test("branch intelligence keeps a large local branch set bounded", async (t) => {
+test("branch intelligence keeps five hundred local branches bounded", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-branch-limit-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
 
@@ -88,14 +88,18 @@ test("branch intelligence keeps a large local branch set bounded", async (t) => 
   await fs.writeFile(path.join(root, "README.md"), "initial\n");
   await git("add", "README.md");
   await git("commit", "-m", "Initial commit");
-  for (let index = 0; index < 120; index += 1) {
+  for (let index = 0; index < 500; index += 1) {
     await git("branch", `feature/bounded-${String(index).padStart(3, "0")}`, "main");
   }
 
   const result = await branchIntelligence(root);
-  assert.equal(result.scope.totalLocal, 121);
-  assert.equal(result.scope.analyzedLocal, 121);
-  assert.equal(result.scope.omittedLocal, 0);
+  assert.equal(result.scope.totalLocal, 501);
+  assert.equal(result.scope.analyzedLocal, 500);
+  assert.equal(result.scope.omittedLocal, 1);
+  const analyzedLocal = result.branches.filter((branch) => !branch.remote);
+  assert.equal(analyzedLocal.length, 500);
+  assert.equal(new Set(analyzedLocal.map((branch) => branch.name)).size, 500);
+  assert.equal(analyzedLocal.every((branch) => branch.analyzed), true);
   assert.equal(result.scope.concurrency, 4);
-  assert.equal(result.scope.truncated, false);
+  assert.equal(result.scope.truncated, true);
 });
