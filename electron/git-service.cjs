@@ -17,6 +17,7 @@ const { listFileHistory } = require("./git/history.cjs");
 const { readFileAtRevision } = require("./git/revisions.cjs");
 const { searchRepository } = require("./git/search.cjs");
 const { getAnalyticsIndex, serializeAnalyticsIndex } = require("./git/analytics/index.cjs");
+const { parseBranchRows, resolveDefaultBranch } = require("./git/analytics/branches.cjs");
 
 const DEFAULT_COMMIT_LIMIT = 1000;
 const MAX_COMMIT_LIMIT = 5000;
@@ -43,27 +44,7 @@ function parseUpstreamTrack(track) {
 }
 
 function parseBranches(raw, currentBranch) {
-  if (!raw.trim()) return [];
-  return raw
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const [ref, name, hash, upstream, date, author, subject, track] = parseNullFields(line, 8);
-      const remote = ref.startsWith("refs/remotes/");
-      return {
-        ref,
-        name,
-        hash,
-        shortHash: hash.slice(0, 8),
-        upstream,
-        ...parseUpstreamTrack(track),
-        date,
-        author,
-        subject,
-        remote,
-        current: !remote && name === currentBranch,
-      };
-    });
+  return parseBranchRows(raw, currentBranch);
 }
 
 function parseCommits(raw) {
@@ -929,19 +910,14 @@ async function scanRepository(candidatePath) {
     }, ""),
   ]);
 
-  const localBranchNames = new Set(branches.filter((branch) => !branch.remote).map((branch) => branch.name));
-  const originDefault = originHead.replace(/^origin\//, "");
-  const defaultBranch =
-    (originDefault && localBranchNames.has(originDefault) && originDefault) ||
-    ["main", "master", "develop", "trunk"].find((name) => localBranchNames.has(name)) ||
-    currentBranch;
+  const defaultBranchInfo = resolveDefaultBranch({ branches, currentBranch, originHead });
 
   return {
     scannedAt: new Date().toISOString(),
     repository: {
       ...repository,
       currentBranch,
-      defaultBranch,
+      ...defaultBranchInfo,
       head: status.oid,
       shortHead: status.oid?.slice(0, 8) ?? "",
       upstream: status.upstream,
