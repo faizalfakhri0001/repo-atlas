@@ -1,5 +1,6 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { spawn } = require("node:child_process");
 const {
   GitServiceError,
   runGit,
@@ -24,6 +25,7 @@ const { buildHotspotReport } = require("./git/analytics/hotspots.cjs");
 const { buildOwnershipReport } = require("./git/analytics/ownership.cjs");
 const { buildHealthReport, parseTrackedFileRows } = require("./git/analytics/health.cjs");
 const { parseBranchRows, resolveDefaultBranch, branchIntelligence } = require("./git/analytics/branches.cjs");
+const { buildWorkspacePatch, parseWorkspacePatch } = require("./git/workspace-operations.cjs");
 
 const DEFAULT_COMMIT_LIMIT = 1000;
 const MAX_COMMIT_LIMIT = 5000;
@@ -348,6 +350,85 @@ async function unstageFiles(repositoryPath, paths, { operationMode = "read-only"
   };
 }
 
+function normalizeHunkRequest(request, source) {
+  if (!request || typeof request !== "object") {
+    throw new GitServiceError("A hunk request is required.", "INVALID_ARGUMENT");
+  }
+  if (Object.prototype.hasOwnProperty.call(request, "patch")) {
+    throw new GitServiceError("Generated patch input is not accepted from the renderer.", "INVALID_ARGUMENT");
+  }
+  const filePath = assertRelativePath(request.path);
+  if (filePath.includes("\n") || filePath.includes("\r")) {
+    throw new GitServiceError("Hunk paths cannot contain line breaks.", "INVALID_PATH");
+  }
+  if (typeof request.hunkId !== "string" || !/^[0-9a-f]{64}$/i.test(request.hunkId)) {
+    throw new GitServiceError("A valid hunk ID is required.", "INVALID_ARGUMENT");
+  }
+  if (request.source !== undefined && request.source !== source) {
+    throw new GitServiceError("The hunk source does not match the requested operation.", "INVALID_ARGUMENT");
+  }
+  return { filePath, hunkId: request.hunkId.toLowerCase() };
+}
+
+async function readCurrentWorkspacePatch(repository, filePath, staged) {
+  const args = ["--literal-pathspecs", "diff", "--no-color", "--no-ext-diff", "--unified=3"];
+  if (staged) args.push("--cached");
+  args.push("--", filePath);
+  const result = await runGit(repository.rootPath, args, { allowFailure: true });
+  if (result.failed && !result.stdout) {
+    throw new GitServiceError(humanizeGitError(result.stderr), "GIT_COMMAND_FAILED", result.stderr);
+  }
+  return parseWorkspacePatch(result.stdout ?? "", filePath, GitServiceError);
+}
+
+async function applyWorkspaceHunk(repositoryPath, request, { operationMode = "read-only" } = {}, operation, source) {
+  assertSafeWriteEnabled(operationMode);
+  const { filePath, hunkId } = normalizeHunkRequest(request, source);
+  const repository = await resolveRepository(repositoryPath);
+  await resolveRepositoryRelativePath(repository.rootPath, filePath);
+
+  if (operation === "unstage") {
+    const head = await runGit(repository.rootPath, ["rev-parse", "--verify", "--quiet", "HEAD"], { allowFailure: true });
+    if (head.failed || !head.stdout.trim()) {
+      throw new GitServiceError("Unstage is not supported before the repository has its first commit.", "UNSUPPORTED_OPERATION");
+    }
+  }
+
+  const current = await readCurrentWorkspacePatch(repository, filePath, source === "staged");
+  const patch = buildWorkspacePatch(current, hunkId);
+  if (!patch) {
+    throw new GitServiceError("The hunk is stale. Refresh the diff before applying it.", "STALE_DIFF");
+  }
+
+  const before = await readWorkspaceStatusForRepository(repository);
+  const args = ["apply", "--cached", ...(operation === "unstage" ? ["--reverse"] : []), "--recount", "-"];
+  const result = await runGitInput(repository.rootPath, args, patch);
+  if (result.failed) {
+    if (/does not apply|patch failed|corrupt patch|cannot apply/i.test(result.stderr)) {
+      throw new GitServiceError("The hunk is stale. Refresh the diff before applying it.", "STALE_DIFF", result.stderr);
+    }
+    throw new GitServiceError(humanizeGitError(result.stderr), "GIT_COMMAND_FAILED", result.stderr);
+  }
+
+  const status = await readWorkspaceStatusForRepository(repository);
+  return {
+    changed: workspaceStatusFingerprint(before) !== workspaceStatusFingerprint(status),
+    paths: [filePath],
+    status,
+    repository: buildWorkspaceOperationRepository(repository, status),
+    operation,
+    hunkId,
+  };
+}
+
+function stageHunk(repositoryPath, request, options = {}) {
+  return applyWorkspaceHunk(repositoryPath, request, options, "stage", "unstaged");
+}
+
+function unstageHunk(repositoryPath, request, options = {}) {
+  return applyWorkspaceHunk(repositoryPath, request, options, "unstage", "staged");
+}
+
 function parseRemotes(raw) {
   const remotes = new Map();
   for (const line of raw.split("\n").filter(Boolean)) {
@@ -627,6 +708,76 @@ function truncateDiff(diffText) {
   return { diff: sliced.slice(0, lastNewline > 0 ? lastNewline : MAX_DIFF_BYTES), truncated: true };
 }
 
+function runGitInput(cwd, args, input, { timeout = 30_000, maxOutputBytes = 2 * 1024 * 1024 } = {}) {
+  if (Buffer.byteLength(String(input ?? ""), "utf8") > MAX_DIFF_BYTES) {
+    throw new GitServiceError("The generated patch is too large to apply safely.", "INVALID_PATCH");
+  }
+
+  return new Promise((resolve, reject) => {
+    const child = spawn("git", args, {
+      cwd,
+      windowsHide: true,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: "0",
+        GCM_INTERACTIVE: "Never",
+        LC_ALL: "C",
+      },
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timer = null;
+
+    const finishError = (error) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      reject(error);
+    };
+
+    const appendOutput = (target, chunk) => {
+      const next = target + chunk.toString();
+      if (Buffer.byteLength(next, "utf8") > maxOutputBytes) {
+        child.kill();
+        finishError(new GitServiceError("Git returned too much patch output.", "GIT_OUTPUT_LIMIT"));
+        return target;
+      }
+      return next;
+    };
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout = appendOutput(stdout, chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr = appendOutput(stderr, chunk);
+    });
+    child.stdin.on("error", (error) => {
+      if (error?.code !== "EPIPE") finishError(new GitServiceError(error?.message || "Git patch input failed.", "GIT_COMMAND_FAILED"));
+    });
+    child.on("error", (error) => {
+      if (error?.code === "ENOENT") {
+        finishError(new GitServiceError("Git executable was not found. Install Git and ensure it is available in PATH.", "GIT_NOT_FOUND"));
+        return;
+      }
+      finishError(new GitServiceError(error?.message || "Git patch operation failed.", "GIT_COMMAND_FAILED"));
+    });
+    child.on("close", (code, signal) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve({ stdout: stdout.trimEnd(), stderr: stderr.trimEnd(), code, signal, failed: code !== 0 });
+    });
+    timer = setTimeout(() => {
+      child.kill();
+      finishError(new GitServiceError("Git patch operation timed out.", "GIT_TIMEOUT"));
+    }, timeout);
+    child.stdin.end(String(input ?? ""));
+  });
+}
+
 async function getFileDiff(repositoryPath, options = {}) {
   const repository = await resolveRepository(repositoryPath);
   const cwd = repository.rootPath;
@@ -656,10 +807,24 @@ async function getFileDiff(repositoryPath, options = {}) {
   }
 
   const { diff, truncated } = truncateDiff(result.stdout ?? "");
+  const binary = /^Binary files .* differ$/m.test(diff) || /^GIT binary patch$/m.test(diff);
+  const workspaceHunks = options.type === "workspace" && !binary
+    ? parseWorkspacePatch(diff, path.relative(cwd, filePath).split(path.sep).join("/"), GitServiceError).hunks.map(({ id, header, oldStart, oldCount, newStart, newCount, context, lines }) => ({
+        id,
+        header,
+        oldStart,
+        oldCount,
+        newStart,
+        newCount,
+        context,
+        lineCount: lines.length,
+      }))
+    : undefined;
   return {
     diff,
     truncated,
-    binary: /^Binary files .* differ$/m.test(diff) || /^GIT binary patch$/m.test(diff),
+    binary,
+    ...(options.type === "workspace" ? { hunks: workspaceHunks ?? [] } : {}),
   };
 }
 
@@ -1296,6 +1461,8 @@ module.exports = {
   branchIntelligence,
   stageFiles,
   unstageFiles,
+  stageHunk,
+  unstageHunk,
   PARTIAL_REFRESH_PARTS,
   invalidateRepositoryDerivedCaches,
   refreshRepositoryPartial,
