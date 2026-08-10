@@ -105,3 +105,23 @@ test("repository success updates recent metadata without storing a snapshot in t
     { path: "/workspace/repository", name: "repository", lastKnownBranch: "main", lastOpenedAt: 20, pinned: false },
   ]);
 });
+
+test("workspace restore recreates lightweight sessions and keeps the last active repository", () => {
+  const state = workspaceReducer(createInitialWorkspaceState(), {
+    type: "WORKSPACE_RESTORE",
+    openPaths: ["/workspace/repository", "/workspace/other"],
+    activePath: "/workspace/other",
+    recentRepositories: [{ path: "/workspace/repository", name: "repository" }],
+    lastActivatedAt: 30,
+  });
+
+  assert.equal(state.activeSessionId, "/workspace/other");
+  assert.deepEqual(
+    state.sessions.map(({ id, path, status, loading, snapshot }) => ({ id, path, status, loading, snapshot })),
+    [
+      { id: "/workspace/repository", path: "/workspace/repository", status: "created", loading: false, snapshot: null },
+      { id: "/workspace/other", path: "/workspace/other", status: "created", loading: false, snapshot: null },
+    ],
+  );
+  assert.deepEqual(state.recentRepositories, [{ path: "/workspace/repository", name: "repository" }]);
+});

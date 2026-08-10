@@ -4,7 +4,8 @@ import { AppShell } from "@/app/AppShell";
 import { MAX_OPEN_SESSIONS, useWorkspaceStore } from "@/app/workspace-store";
 
 function App() {
-  const { state, activeSession, actions, findRepository } = useWorkspaceStore();
+  const workspaceStorage = !isDemo && typeof window !== "undefined" ? window.localStorage : null;
+  const { state, activeSession, actions, findRepository } = useWorkspaceStore({ storage: workspaceStorage });
   const data = activeSession?.snapshot ?? null;
   const [theme, setTheme] = useState(() => localStorage.getItem("repo-atlas-theme") || "dark");
   const initialized = useRef(false);
