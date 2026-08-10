@@ -4,6 +4,8 @@ const { normalizeAuthorIdentity } = require("./identity.cjs");
 const DEFAULT_OWNERSHIP_LIMIT = 100;
 const MAX_OWNERSHIP_LIMIT = 1000;
 const OWNERSHIP_PERIODS = new Set(["all", "12m"]);
+const TWELVE_MONTHS_DAYS = 365;
+const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 
 function finiteNumber(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -25,6 +27,26 @@ function normalizeOwnershipLimit(value) {
 function normalizeOwnershipPath(value) {
   const path = typeof value === "string" ? value.trim() : "";
   return path ? assertRelativePath(path).replace(/\/+$/, "") : "";
+}
+
+function timestampOf(value) {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
+  if (typeof value === "string" && value.trim()) return Date.parse(value);
+  return NaN;
+}
+
+function ownershipPeriodStart(period, now = Date.now()) {
+  if (normalizeOwnershipPeriod(period) !== "12m") return -Infinity;
+  const current = timestampOf(now);
+  return Number.isFinite(current) ? current - TWELVE_MONTHS_DAYS * DAY_IN_MILLISECONDS : NaN;
+}
+
+function commitIsInOwnershipPeriod(commit, period, now) {
+  const start = ownershipPeriodStart(period, now);
+  if (start === -Infinity) return true;
+  const timestamp = timestampOf(commit?.authoredAt);
+  return Number.isFinite(start) && Number.isFinite(timestamp) && timestamp >= start;
 }
 
 function contributorKey(author) {
@@ -201,11 +223,60 @@ function aggregateFileOwnership(index) {
   return files;
 }
 
+function aggregateRecentFileOwnership(index, { now = Date.now() } = {}) {
+  const files = new Map();
+  for (const commit of Array.isArray(index?.commits) ? index.commits : []) {
+    if (!commitIsInOwnershipPeriod(commit, "12m", now)) continue;
+    const identity = normalizeAuthorIdentity(commit.author);
+    const seenPaths = new Set();
+    for (const change of Array.isArray(commit.files) ? commit.files : []) {
+      if (!change?.path || seenPaths.has(change.path)) continue;
+      seenPaths.add(change.path);
+      let file = files.get(change.path);
+      if (!file) {
+        file = createFileOwnership(change.path);
+        files.set(change.path, file);
+      }
+      const additions = finiteNumber(change.additions);
+      const deletions = finiteNumber(change.deletions);
+      const churn = additions + deletions;
+      file.totalCommits += 1;
+      file.additions += additions;
+      file.deletions += deletions;
+      file.totalChurn += churn;
+      file.firstSeenAt = !file.firstSeenAt || commit.authoredAt < file.firstSeenAt ? commit.authoredAt : file.firstSeenAt;
+      file.lastChangedAt = laterDate(file.lastChangedAt, commit.authoredAt);
+      let contributor = file.contributors.get(identity.key);
+      if (!contributor) {
+        contributor = createContributor(identity);
+        file.contributors.set(identity.key, contributor);
+      }
+      mergeContributor(contributor, {
+        ...identity,
+        commits: 1,
+        additions,
+        deletions,
+        churn,
+        authoredAt: commit.authoredAt,
+      }, { recent: true });
+    }
+  }
+  return files;
+}
+
+function aggregateOwnershipByPeriod(index, { period = "all", now = Date.now() } = {}) {
+  return normalizeOwnershipPeriod(period) === "12m" ? aggregateRecentFileOwnership(index, { now }) : aggregateFileOwnership(index);
+}
+
 module.exports = {
   DEFAULT_OWNERSHIP_LIMIT,
+  DAY_IN_MILLISECONDS,
   MAX_OWNERSHIP_LIMIT,
   OWNERSHIP_PERIODS,
+  TWELVE_MONTHS_DAYS,
   aggregateFileOwnership,
+  aggregateOwnershipByPeriod,
+  aggregateRecentFileOwnership,
   aggregateDirectoryOwnership,
   calculateOwnershipMetrics,
   concentrationLabel,
@@ -222,4 +293,6 @@ module.exports = {
   normalizeOwnershipLimit,
   normalizeOwnershipPath,
   normalizeOwnershipPeriod,
+  ownershipPeriodStart,
+  timestampOf,
 };

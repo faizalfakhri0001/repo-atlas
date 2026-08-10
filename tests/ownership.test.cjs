@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const {
   aggregateDirectoryOwnership,
   aggregateFileOwnership,
+  aggregateOwnershipByPeriod,
   calculateOwnershipMetrics,
   contributorKey,
   normalizeOwnershipPeriod,
@@ -84,4 +85,27 @@ test("calculateOwnershipMetrics exposes weighted shares and concentration labels
   const single = calculateOwnershipMetrics({ totalCommits: 1, totalChurn: 0, contributors: new Map([["name:ada", { key: "name:ada", name: "Ada", commits: 1, churn: 0 }]]) });
   assert.equal(single.primaryContributor.ownershipScore, 1);
   assert.equal(single.concentrationLabel, "Highly concentrated");
+});
+
+test("aggregateOwnershipByPeriod keeps all-time and last twelve months data separate", () => {
+  const index = {
+    files: new Map([
+      ["src/app.js", { path: "src/app.js", commits: 2, additions: 10, deletions: 2, authors: new Map([
+        ["email:old@example.test", { name: "Old", email: "old@example.test", commits: 1, additions: 5, deletions: 1 }],
+        ["email:new@example.test", { name: "New", email: "new@example.test", commits: 1, additions: 5, deletions: 1 }],
+      ]) }],
+    ]),
+    commits: [
+      { authoredAt: "2025-01-01T00:00:00Z", author: { name: "Old", email: "old@example.test" }, files: [{ path: "src/app.js", additions: 5, deletions: 1 }] },
+      { authoredAt: "2026-08-01T00:00:00Z", author: { name: "New", email: "new@example.test" }, files: [{ path: "src/app.js", additions: 5, deletions: 1 }] },
+    ],
+  };
+
+  const allTime = aggregateOwnershipByPeriod(index, { period: "all" }).get("src/app.js");
+  const recent = aggregateOwnershipByPeriod(index, { period: "12m", now: "2026-08-10T00:00:00Z" }).get("src/app.js");
+  assert.equal(allTime.totalCommits, 2);
+  assert.equal(allTime.contributors.size, 2);
+  assert.equal(recent.totalCommits, 1);
+  assert.equal(recent.totalChurn, 6);
+  assert.deepEqual([...recent.contributors.keys()], ["email:new@example.test"]);
 });
