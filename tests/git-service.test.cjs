@@ -180,6 +180,42 @@ test("scanRepository resolves a linked worktree as its own repository context", 
   assert.ok(result.worktrees.some((worktree) => worktree.path === resolvedRoot && worktree.branch === "main"));
 });
 
+test("scanRepository reports an initialized submodule without traversing into it", async (t) => {
+  const source = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-submodule-source-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-submodule-root-"));
+  t.after(() => Promise.all([
+    fs.rm(source, { recursive: true, force: true }),
+    fs.rm(root, { recursive: true, force: true }),
+  ]));
+
+  const sourceGit = (...args) => execFileAsync("git", args, { cwd: source, encoding: "utf8" });
+  const rootGit = (...args) => execFileAsync("git", args, { cwd: root, encoding: "utf8" });
+  await sourceGit("init", "-b", "main");
+  await sourceGit("config", "user.name", "Submodule Author");
+  await sourceGit("config", "user.email", "submodule@example.test");
+  await fs.writeFile(path.join(source, "module.js"), "export const module = true;\n");
+  await sourceGit("add", "module.js");
+  await sourceGit("commit", "-m", "Add module");
+
+  await rootGit("init", "-b", "main");
+  await rootGit("config", "user.name", "Repo Atlas Test");
+  await rootGit("config", "user.email", "repo-atlas@example.test");
+  await fs.writeFile(path.join(root, "README.md"), "parent\n");
+  await rootGit("add", "README.md");
+  await rootGit("commit", "-m", "Add parent");
+  await execFileAsync("git", ["-c", "protocol.file.allow=always", "submodule", "add", source, "vendor/dep"], { cwd: root, encoding: "utf8" });
+  await rootGit("commit", "-am", "Add submodule");
+
+  const result = await scanRepository(root);
+  const submodule = result.submodules.find((entry) => entry.path === "vendor/dep");
+
+  assert.ok(submodule);
+  assert.equal(submodule.state, "clean");
+  assert.equal(submodule.name, "vendor/dep");
+  assert.equal(submodule.hash.length, 40);
+  assert.equal(result.status.files.length, 0);
+});
+
 test("listRepositoryFiles follows Git ignore rules and reports tracked state", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-files-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
