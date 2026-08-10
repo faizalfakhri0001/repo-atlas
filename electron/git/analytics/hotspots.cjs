@@ -17,6 +17,26 @@ function calculateCommitFrequency(file) {
   return finiteNumber(file?.commitCount ?? file?.commits);
 }
 
+function timestampOf(value) {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
+  if (typeof value === "string" && value.trim()) return Date.parse(value);
+  return NaN;
+}
+
+function calculateAgeDays(lastChangedAt, now = Date.now()) {
+  const changedAt = timestampOf(lastChangedAt);
+  const current = timestampOf(now);
+  if (!Number.isFinite(changedAt) || !Number.isFinite(current)) return null;
+  return Math.max(0, (current - changedAt) / DAY_IN_MILLISECONDS);
+}
+
+function calculateRecencyScore(lastChangedAt, now = Date.now()) {
+  const ageDays = calculateAgeDays(lastChangedAt, now);
+  if (ageDays == null) return 0;
+  return Math.exp(-ageDays / RECENCY_WINDOW_DAYS);
+}
+
 function mapValues(value) {
   if (value instanceof Map) return [...value.values()];
   return Array.isArray(value) ? value : [];
@@ -76,6 +96,8 @@ module.exports = {
   collectFileActivity,
   calculateChurn,
   calculateCommitFrequency,
+  calculateAgeDays,
+  calculateRecencyScore,
   normalizeHotspotLimit,
   normalizePathPrefix,
   pathMatchesPrefix,
