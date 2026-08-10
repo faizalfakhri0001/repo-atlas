@@ -9,6 +9,20 @@ const HOTSPOT_WEIGHTS = Object.freeze({
   churn: 0.35,
   recency: 0.2,
 });
+const GENERATED_DIRECTORY_NAMES = new Set(["build", "coverage", "dist", "node_modules", "vendor"]);
+const LOCK_FILE_NAMES = new Set([
+  "bun.lock",
+  "bun.lockb",
+  "cargo.lock",
+  "composer.lock",
+  "gemfile.lock",
+  "go.sum",
+  "npm-shrinkwrap.json",
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "pnpm-lock.yml",
+  "yarn.lock",
+]);
 
 function finiteNumber(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -146,6 +160,37 @@ function pathMatchesPrefix(filePath, pathPrefix) {
   return filePath === pathPrefix || filePath.startsWith(`${pathPrefix}/`);
 }
 
+function isGeneratedPath(filePath) {
+  const normalized = String(filePath ?? "").replaceAll("\\", "/");
+  const segments = normalized.split("/").filter(Boolean);
+  const basename = segments.at(-1)?.toLowerCase() ?? "";
+  return (
+    segments.some((segment) => GENERATED_DIRECTORY_NAMES.has(segment.toLowerCase())) ||
+    LOCK_FILE_NAMES.has(basename) ||
+    basename.endsWith(".lock") ||
+    basename.endsWith(".lockb") ||
+    /\.min\.js$/i.test(basename) ||
+    /\.min\.css$/i.test(basename)
+  );
+}
+
+function filterGeneratedFiles(files, { includeGenerated = false, pathPrefix = "" } = {}) {
+  const activities = Array.isArray(files) ? files : [];
+  const normalizedPrefix = normalizePathPrefix(pathPrefix);
+  const matchingFiles = activities.filter((file) => pathMatchesPrefix(file.path, normalizedPrefix));
+  const generatedFiles = matchingFiles.filter((file) => isGeneratedPath(file.path));
+  const visibleFiles = includeGenerated ? matchingFiles : matchingFiles.filter((file) => !isGeneratedPath(file.path));
+  return {
+    files: visibleFiles,
+    totalFiles: activities.length,
+    matchedFiles: matchingFiles.length,
+    generatedFiles: generatedFiles.length,
+    excludedGeneratedFiles: includeGenerated ? 0 : generatedFiles.length,
+    includeGenerated: Boolean(includeGenerated),
+    pathPrefix: normalizedPrefix,
+  };
+}
+
 function normalizeHotspotLimit(value) {
   return Math.min(MAX_HOTSPOT_LIMIT, Math.max(1, Math.floor(Number(value) || DEFAULT_HOTSPOT_LIMIT)));
 }
@@ -163,6 +208,8 @@ module.exports = {
   calculateRecencyScore,
   calculateHotspotScore,
   hotspotBand,
+  filterGeneratedFiles,
+  isGeneratedPath,
   normalizeHotspotLimit,
   normalizePathPrefix,
   pathMatchesPrefix,

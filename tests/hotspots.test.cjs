@@ -7,6 +7,8 @@ const {
   calculateHotspotScore,
   calculateRecencyScore,
   collectFileActivity,
+  filterGeneratedFiles,
+  isGeneratedPath,
   percentileRank,
   scoreHotspotActivity,
 } = require("../electron/git/analytics/hotspots.cjs");
@@ -66,6 +68,29 @@ test("scoreHotspotActivity keeps raw metrics and exposes explainable weighted sc
     assert.ok(file.hotspotScore >= 0 && file.hotspotScore <= 1);
     assert.ok(file.hotspotPercentile >= 0 && file.hotspotPercentile <= 1);
   }
+});
+
+test("generated and lock paths are excluded by default but can be included", () => {
+  assert.equal(isGeneratedPath("package-lock.json"), true);
+  assert.equal(isGeneratedPath("dist/assets/app.min.js"), true);
+  assert.equal(isGeneratedPath("vendor/library.js"), true);
+  assert.equal(isGeneratedPath("coverage/lcov.info"), true);
+  assert.equal(isGeneratedPath("src/app.min.js"), true);
+  assert.equal(isGeneratedPath("src/app.js"), false);
+
+  const files = [
+    { path: "src/app.js" },
+    { path: "dist/app.js" },
+    { path: "package-lock.json" },
+    { path: "docs/readme.md" },
+  ];
+  const filtered = filterGeneratedFiles(files, { pathPrefix: "src" });
+  assert.deepEqual(filtered.files.map((file) => file.path), ["src/app.js"]);
+  assert.equal(filtered.totalFiles, 4);
+  assert.equal(filtered.matchedFiles, 1);
+  assert.equal(filtered.excludedGeneratedFiles, 0);
+  assert.deepEqual(filterGeneratedFiles(files).files.map((file) => file.path), ["src/app.js", "docs/readme.md"]);
+  assert.deepEqual(filterGeneratedFiles(files, { includeGenerated: true }).files.map((file) => file.path), files.map((file) => file.path));
 });
 
 test("collectFileActivity normalizes file metrics from the shared analytics index", () => {
