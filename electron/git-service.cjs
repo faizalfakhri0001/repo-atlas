@@ -29,6 +29,7 @@ const MAX_CHERRY_PICK_COMMITS = 50;
 const MAX_CONFLICT_PREDICTIONS = 25;
 const MAX_DIFF_BYTES = 1_200_000;
 const COMMIT_FORMAT = "--pretty=format:%H%x1f%P%x1f%D%x1f%an%x1f%ae%x1f%ad%x1f%s%x1e";
+const PARTIAL_REFRESH_PARTS = new Set(["status", "refs", "head", "state"]);
 
 function parseNullFields(line, expected) {
   const fields = line.split("\0");
@@ -1015,6 +1016,109 @@ async function scanRepository(candidatePath) {
   };
 }
 
+function buildPartialRepository(repository, status, defaultBranchInfo = {}) {
+  return {
+    ...repository,
+    currentBranch: status.branch,
+    ...defaultBranchInfo,
+    head: status.oid,
+    shortHead: status.oid?.slice(0, 8) ?? "",
+    upstream: status.upstream,
+    ahead: status.ahead,
+    behind: status.behind,
+    dirty: status.files.length > 0,
+  };
+}
+
+async function readPartialStatus(repository) {
+  const [statusResult, state] = await Promise.all([
+    runGit(repository.rootPath, ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]),
+    getRepositoryState(repository.gitDir),
+  ]);
+  const status = parseStatus(statusResult.stdout);
+  return { status, state, repository: buildPartialRepository(repository, status) };
+}
+
+async function readPartialRefs(repository, currentBranch) {
+  const [branches, tags, commits, contributors, totalCommits, originHead] = await Promise.all([
+    safe(async () => {
+      const result = await runGit(repository.rootPath, [
+        "for-each-ref",
+        "--sort=-committerdate",
+        "--format=%(refname)%00%(refname:short)%00%(objectname)%00%(upstream:short)%00%(committerdate:iso-strict)%00%(authorname)%00%(subject)%00%(upstream:track)",
+        "refs/heads",
+        "refs/remotes",
+      ]);
+      return parseBranches(result.stdout, currentBranch);
+    }, []),
+    safe(async () => {
+      const result = await runGit(repository.rootPath, [
+        "for-each-ref",
+        "--sort=-creatordate",
+        "--format=%(refname:short)%00%(objectname)%00%(creatordate:iso-strict)%00%(subject)",
+        "refs/tags",
+      ]);
+      return parseTags(result.stdout);
+    }, []),
+    safe(async () => {
+      const result = await runGit(repository.rootPath, ["log", "--all", "--topo-order", "--date=iso-strict", "-n", String(DEFAULT_COMMIT_LIMIT), COMMIT_FORMAT]);
+      return parseCommits(result.stdout);
+    }, []),
+    safe(async () => {
+      const result = await runGit(repository.rootPath, ["shortlog", "-sne", "--all"]);
+      return parseContributors(result.stdout);
+    }, []),
+    safe(async () => {
+      const result = await runGit(repository.rootPath, ["rev-list", "--count", "--all"]);
+      return Number(result.stdout) || 0;
+    }, null),
+    safe(async () => {
+      const result = await runGit(repository.rootPath, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], { allowFailure: true });
+      return result.failed ? "" : result.stdout.trim();
+    }, ""),
+  ]);
+  const defaultBranchInfo = resolveDefaultBranch({ branches, currentBranch, originHead });
+  return { branches, tags, commits, contributors, totalCommits, defaultBranchInfo };
+}
+
+async function refreshRepositoryPartial(repositoryPath, requestedParts = []) {
+  const repository = await resolveRepository(repositoryPath);
+  const parts = [...new Set(Array.isArray(requestedParts) ? requestedParts : [])];
+  if (parts.length === 0 || parts.some((part) => !PARTIAL_REFRESH_PARTS.has(part))) {
+    throw new GitServiceError("Refresh parts must use the supported repository sections.", "INVALID_ARGUMENT");
+  }
+
+  const needsStatus = parts.some((part) => ["status", "head", "refs", "state"].includes(part));
+  const partialStatus = needsStatus ? await readPartialStatus(repository) : null;
+  const data = { scannedAt: new Date().toISOString() };
+  if (partialStatus && (parts.includes("status") || parts.includes("head") || parts.includes("state"))) {
+    if (parts.includes("status") || parts.includes("head")) data.status = partialStatus.status;
+    if (parts.includes("state") || parts.includes("head")) data.state = partialStatus.state;
+    data.repository = partialStatus.repository;
+  }
+  if (parts.includes("refs")) {
+    const refs = await readPartialRefs(repository, partialStatus?.status.branch ?? "");
+    Object.assign(data, {
+      branches: refs.branches,
+      tags: refs.tags,
+      commits: refs.commits,
+      contributors: refs.contributors,
+      repository: {
+        ...(data.repository ?? buildPartialRepository(repository, partialStatus?.status ?? parseStatus(""))),
+        ...refs.defaultBranchInfo,
+        totalCommits: refs.totalCommits,
+      },
+    });
+  }
+  if (parts.includes("head") && !data.commits) {
+    const result = await runGit(repository.rootPath, ["log", "--all", "--topo-order", "--date=iso-strict", "-n", String(DEFAULT_COMMIT_LIMIT), COMMIT_FORMAT]);
+    data.commits = parseCommits(result.stdout);
+    const count = await runGit(repository.rootPath, ["rev-list", "--count", "--all"], { allowFailure: true });
+    data.repository = { ...data.repository, totalCommits: count.failed ? null : Number(count.stdout) || 0 };
+  }
+  return { repositoryPath: repository.rootPath, parts, data };
+}
+
 module.exports = {
   GitServiceError,
   runGit,
@@ -1057,6 +1161,8 @@ module.exports = {
   repositoryHealth,
   listTrackedFileSizes,
   branchIntelligence,
+  PARTIAL_REFRESH_PARTS,
+  refreshRepositoryPartial,
   compareRefs,
   cherryPickPreview,
   cherryPickExecute,

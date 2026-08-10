@@ -21,6 +21,7 @@ const {
   ownershipSummary,
   repositoryHealth,
   branchIntelligence,
+  refreshRepositoryPartial,
   GitServiceError,
 } = require("./git-service.cjs");
 
@@ -113,6 +114,7 @@ function registerIpcHandlers() {
     "analytics:ownership": (payload) => ownershipSummary(payload?.repositoryPath, payload ?? {}),
     "repository:health": (payload) => repositoryHealth(payload?.repositoryPath, payload ?? {}),
     "branches:intelligence": (payload) => branchIntelligence(payload?.repositoryPath, payload ?? {}),
+    "repository:refresh-partial": (payload) => refreshRepositoryPartial(payload?.repositoryPath, payload?.parts),
   };
 
   for (const [channel, task] of Object.entries(invokeHandlers)) {
