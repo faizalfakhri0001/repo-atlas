@@ -69,8 +69,9 @@ export function FilePreview({ repoPath, node }) {
         <PreviewHeader node={node} data={state.data} />
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center text-sm text-muted-foreground">
           <ScanLine className="size-6" />
-          Binary file — no text preview available.
-          <span className="text-xs">{formatBytes(state.data.size)}</span>
+          <p className="font-medium text-foreground">Binary file</p>
+          <p className="text-xs">No text preview is available for this file.</p>
+          <Badge variant="muted">{formatBytes(state.data.size)}</Badge>
         </div>
       </div>
     );

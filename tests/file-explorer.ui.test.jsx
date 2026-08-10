@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FileExplorer } from "@/components/file-explorer";
 
 const { listRepositoryFiles, readRepositoryFile } = vi.hoisted(() => ({
@@ -13,6 +13,8 @@ vi.mock("@/lib/api", () => ({
 }));
 
 describe("FileExplorer", () => {
+  afterEach(() => cleanup());
+
   it("loads a repository tree and expands directories", async () => {
     listRepositoryFiles.mockResolvedValueOnce({
       ok: true,
@@ -51,5 +53,22 @@ describe("FileExplorer", () => {
     expect(screen.getByRole("treeitem", { name: "README.md" })).toBeInTheDocument();
     expect(screen.queryByRole("treeitem", { name: "src" })).not.toBeInTheDocument();
     expect(listRepositoryFiles).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository" });
+  });
+
+  it("shows a clear state for binary files", async () => {
+    listRepositoryFiles.mockResolvedValueOnce({
+      ok: true,
+      data: [{ path: "assets/logo.bin", name: "logo.bin", extension: "bin", tracked: true }],
+    });
+    readRepositoryFile.mockResolvedValueOnce({
+      ok: true,
+      data: { path: "assets/logo.bin", text: null, binary: true, truncated: false, size: 2048, language: null },
+    });
+    const user = userEvent.setup();
+    render(<FileExplorer repoPath="/workspace/repository" />);
+
+    await user.click(await screen.findByRole("treeitem", { name: "logo.bin" }));
+    expect(await screen.findByText("Binary file")).toBeInTheDocument();
+    expect(screen.getAllByText("2.0 KB")).toHaveLength(2);
   });
 });
