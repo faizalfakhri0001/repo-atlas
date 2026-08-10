@@ -50,6 +50,8 @@ test("workspace reducer keeps repository data and view state inside a session", 
     entries: [],
     scrollTop: 0,
   });
+  state = workspaceReducer(state, { type: "session/request-file-filter", nonce: 7 });
+  assert.equal(state.sessions[0].ui.fileFilterRequest, 7);
 });
 
 test("new sessions start with isolated navigation state", () => {
@@ -57,7 +59,7 @@ test("new sessions start with isolated navigation state", () => {
   assert.equal(session.id, "c:\\work\\repo");
   assert.equal(session.name, "repo");
   assert.equal(session.activeView, "overview");
-  assert.deepEqual(session.ui, { graphRequest: null, compareInit: null, cherryPick: null, fileHistory: null });
+  assert.deepEqual(session.ui, { graphRequest: null, compareInit: null, cherryPick: null, fileHistory: null, fileFilterRequest: null });
   assert.equal(session.lastActivatedAt, 10);
 });
 

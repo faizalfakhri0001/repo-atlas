@@ -64,6 +64,7 @@ export function useWorkspaceStore({ storage = null } = {}) {
       setCompareInit: (initial) => dispatch({ type: "session/set-compare-init", initial }),
       setCherryPick: (value) => dispatch({ type: "session/set-cherry-pick", value }),
       setFileHistory: (value, sessionId = null) => dispatch({ type: "session/set-file-history", value, sessionId }),
+      requestFileFilter: (nonce = Date.now()) => dispatch({ type: "session/request-file-filter", nonce }),
     }),
     [],
   );

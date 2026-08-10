@@ -279,6 +279,7 @@ export function AppShell({
                     graphRequest={loadedSession.ui.graphRequest}
                     compareInit={loadedSession.ui.compareInit}
                     fileHistory={loadedSession.ui.fileHistory}
+                    fileFilterRequest={loadedSession.ui.fileFilterRequest}
                     onCompare={onCompare}
                     onCherryPick={onCherryPick}
                     onShowBranchInGraph={onShowBranchInGraph}
@@ -325,6 +326,7 @@ function ViewHost({
   onFocusCommit,
   onShowWorkspace,
   fileHistory,
+  fileFilterRequest,
   onFileHistoryChange,
 }) {
   // Commits and Compare stay mounted so their state (filters, selection,
@@ -360,6 +362,7 @@ function ViewHost({
           repoPath={data.repository.rootPath}
           status={data.status}
           historyState={fileHistory}
+          focusFilterRequest={fileFilterRequest}
           onHistoryStateChange={onFileHistoryChange}
         />
       )}

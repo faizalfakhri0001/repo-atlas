@@ -86,6 +86,14 @@ describe("FileExplorer", () => {
     expect(screen.getAllByText("2.0 KB")).toHaveLength(2);
   });
 
+  it("focuses the filter when a quick-open request arrives", async () => {
+    listRepositoryFiles.mockResolvedValueOnce({ ok: true, data: [] });
+    render(<FileExplorer repoPath="/workspace/repository" focusFilterRequest={1} />);
+
+    const filter = await screen.findByRole("textbox", { name: "Filter files" });
+    await vi.waitFor(() => expect(filter).toHaveFocus());
+  });
+
   it("labels a large file preview as truncated", async () => {
     listRepositoryFiles.mockResolvedValueOnce({
       ok: true,

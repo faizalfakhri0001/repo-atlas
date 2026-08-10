@@ -36,7 +36,7 @@ import {
 const ROW_HEIGHT = 28;
 const OVERSCAN = 8;
 
-export function FileExplorer({ repoPath, status, onSelectFile, historyState, onHistoryStateChange }) {
+export function FileExplorer({ repoPath, status, onSelectFile, historyState, onHistoryStateChange, focusFilterRequest = null }) {
   const [state, setState] = useState({ loading: true, error: null, files: [] });
   const [expandedPaths, setExpandedPaths] = useState(() => new Set());
   const [selectedPath, setSelectedPath] = useState(null);
@@ -56,6 +56,16 @@ export function FileExplorer({ repoPath, status, onSelectFile, historyState, onH
     window.addEventListener("keydown", handleQuickFileShortcut);
     return () => window.removeEventListener("keydown", handleQuickFileShortcut);
   }, []);
+
+  useEffect(() => {
+    if (focusFilterRequest == null) return undefined;
+    setQuery("");
+    const timer = window.setTimeout(() => {
+      filterRef.current?.focus();
+      filterRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [focusFilterRequest]);
 
   useEffect(() => {
     let cancelled = false;
