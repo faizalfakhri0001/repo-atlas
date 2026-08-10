@@ -69,6 +69,19 @@ test("workspace regression keeps navigation state isolated across repository tab
   assert.deepEqual(beta.ui.compareInit, { base: "main", head: "feature/beta", nonce: 6 });
   assert.deepEqual(beta.ui.fileSelectionRequest, { path: "src/beta.js", nonce: 7 });
 
+  state = workspaceReducer(state, {
+    type: "session/request-file-selection",
+    sessionId: "/workspace/alpha",
+    path: "src/alpha.js",
+    nonce: 8,
+    openHistory: true,
+  });
+  assert.deepEqual(state.sessions.find((session) => session.id === "/workspace/alpha").ui.fileSelectionRequest, {
+    path: "src/alpha.js",
+    nonce: 8,
+    openHistory: true,
+  });
+
   state = workspaceReducer(state, { type: "SESSION_ACTIVATE", sessionId: "/workspace/alpha", lastActivatedAt: 8 });
   assert.equal(state.activeSessionId, "/workspace/alpha");
   assert.equal(state.sessions.find((session) => session.id === "/workspace/beta").activeView, "workspace");

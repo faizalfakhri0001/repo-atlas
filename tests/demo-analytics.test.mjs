@@ -15,3 +15,15 @@ test("demo API provides bounded analytics file and author data", async () => {
   assert.ok(response.data.files.every((file) => Array.isArray(file.authors)));
   assert.equal(response.data.repositoryKey, "/demo/acme-storefront");
 });
+
+test("demo API provides hotspot metrics and generated-file controls", async () => {
+  const api = createDemoApi();
+  const response = await api.hotspots({ limit: 3 });
+
+  assert.equal(response.ok, true);
+  assert.ok(response.data.files.length <= 3);
+  assert.deepEqual(response.data.metrics.weights, { commitFrequency: 0.45, churn: 0.35, recency: 0.2 });
+  assert.ok(response.data.files.every((file) => Number.isFinite(file.hotspotScore)));
+  assert.ok(response.data.files.every((file) => Number.isFinite(file.commitCount) && Number.isFinite(file.churn)));
+  assert.equal(response.data.filters.includeGenerated, false);
+});
