@@ -3232,20 +3232,20 @@ Existing behavior tetap bekerja tanpa regression.
 
 ## Stage 7 — Hardening
 
-- [ ] test repository 10k+ commits.
-- [ ] test repository 50k+ files.
-- [ ] test huge diff.
-- [ ] test binary files.
-- [ ] test symlink escape.
-- [ ] test Windows paths.
-- [ ] test macOS paths.
-- [ ] test Linux paths.
-- [ ] verify demo mode.
-- [ ] verify light/dark mode.
-- [ ] keyboard-only UX audit.
-- [ ] regression cherry-pick.
-- [ ] regression compare.
-- [ ] regression workspace.
+- [x] test repository 10k+ commits.
+- [x] test repository 50k+ files.
+- [x] test huge diff.
+- [x] test binary files.
+- [x] test symlink escape.
+- [x] test Windows paths.
+- [x] test macOS paths.
+- [x] test Linux paths.
+- [x] verify demo mode.
+- [x] verify light/dark mode.
+- [x] keyboard-only UX audit.
+- [x] regression cherry-pick.
+- [x] regression compare.
+- [x] regression workspace.
 
 ---
 
