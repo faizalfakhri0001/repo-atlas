@@ -3214,18 +3214,19 @@ Existing behavior tetap bekerja tanpa regression.
 
 ## Stage 6 — Global Search
 
-- [ ] search query model.
-- [ ] file search.
-- [ ] ref search.
-- [ ] commit search.
-- [ ] author search.
-- [ ] hash search.
-- [ ] `repository:search`.
-- [ ] global search overlay.
-- [ ] result keyboard navigation.
-- [ ] stale request protection.
-- [ ] command palette integration.
-- [ ] full integration tests.
+- [x] search query model.
+- [x] file search.
+- [x] ref search.
+- [x] commit search.
+- [x] author search.
+- [x] hash search.
+- [x] `repository:search`.
+- [x] global search overlay.
+- [x] result keyboard navigation.
+- [x] stale request protection.
+- [x] command palette integration.
+- [x] full integration tests (unit, Git integration, and component tests).
+- [ ] Global Search E2E. (Dilewati sesuai instruksi pengguna.)
 
 ---
 
@@ -3631,7 +3632,7 @@ select commit
 - [x] Navigation actions
 - [x] Repository actions
 - [x] Quick file integration
-- [ ] Global search integration
+- [x] Global search integration
 
 ## Recent / Multi Repository
 
@@ -3676,24 +3677,24 @@ select commit
 
 ## Global Search
 
-- [ ] File
-- [ ] Commit
-- [ ] Branch
-- [ ] Tag
-- [ ] Author
-- [ ] Hash
-- [ ] Query parser
-- [ ] Keyboard navigation
-- [ ] Request race protection
-- [ ] Command palette integration
+- [x] File
+- [x] Commit
+- [x] Branch
+- [x] Tag
+- [x] Author
+- [x] Hash
+- [x] Query parser
+- [x] Keyboard navigation
+- [x] Request race protection
+- [x] Command palette integration
 
 ## Quality
 
-- [ ] Unit tests
-- [ ] Git integration tests
-- [ ] React component tests
+- [x] Unit tests
+- [x] Git integration tests
+- [x] React component tests
 - [ ] Electron E2E tests
-- [ ] Demo mode
+- [x] Demo mode
 - [ ] macOS
 - [ ] Windows
 - [ ] Linux
