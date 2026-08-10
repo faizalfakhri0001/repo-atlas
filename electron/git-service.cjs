@@ -19,6 +19,7 @@ const { searchRepository } = require("./git/search.cjs");
 const { getAnalyticsIndex, serializeAnalyticsIndex } = require("./git/analytics/index.cjs");
 const { buildHotspotReport } = require("./git/analytics/hotspots.cjs");
 const { buildOwnershipReport } = require("./git/analytics/ownership.cjs");
+const { buildHealthReport, parseTrackedFileRows } = require("./git/analytics/health.cjs");
 const { parseBranchRows, resolveDefaultBranch, branchIntelligence } = require("./git/analytics/branches.cjs");
 
 const DEFAULT_COMMIT_LIMIT = 1000;
@@ -562,6 +563,66 @@ async function ownershipSummary(repositoryPath, options = {}) {
   return buildOwnershipReport(index, options);
 }
 
+async function listTrackedFileSizes(repositoryRoot) {
+  const headResult = await runGit(repositoryRoot, ["rev-parse", "--verify", "--quiet", "HEAD"], { allowFailure: true });
+  if (headResult.failed || !headResult.stdout.trim()) {
+    return { files: [], totalEntries: 0, truncated: false };
+  }
+  const treeResult = await runGit(repositoryRoot, ["ls-tree", "-r", "-l", "-z", headResult.stdout.trim(), "--"], {
+    allowFailure: true,
+    timeout: 30_000,
+  });
+  if (treeResult.failed) {
+    return { files: [], totalEntries: 0, truncated: true, error: treeResult.stderr || "Tracked file sizes could not be read." };
+  }
+  return parseTrackedFileRows(treeResult.stdout);
+}
+
+async function repositoryHealth(repositoryPath, options = {}) {
+  const repository = await resolveRepository(repositoryPath);
+  const analyticsOptions = {
+    maxCommits: options.maxCommits,
+    maxFilesPerCommit: options.maxFilesPerCommit,
+    maxOutputBytes: options.maxOutputBytes,
+    timeoutMs: options.timeoutMs,
+    signal: options.signal,
+  };
+  const [statusResult, countObjectsResult, branches, analytics, trackedFiles] = await Promise.all([
+    runGit(repository.rootPath, ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]),
+    runGit(repository.rootPath, ["count-objects", "-v"], { allowFailure: true }),
+    branchIntelligence(repository.rootPath, options),
+    getAnalyticsIndex(repository.rootPath, analyticsOptions),
+    listTrackedFileSizes(repository.rootPath),
+  ]);
+  const status = parseStatus(statusResult.stdout);
+  const hotspots = buildHotspotReport(analytics, { limit: 100, now: options.now });
+  const report = buildHealthReport(
+    {
+      repository,
+      status,
+      branches,
+      analytics,
+      trackedFiles,
+      hotspots,
+      countObjects: countObjectsResult.failed ? {} : parseCountObjects(countObjectsResult.stdout),
+    },
+    { now: options.now ?? Date.now(), limit: options.limit },
+  );
+  return {
+    repositoryKey: repository.rootPath,
+    head: analytics.head || status.oid || "",
+    generatedAt: report.generatedAt,
+    repository: {
+      name: repository.name,
+      rootPath: repository.rootPath,
+      head: analytics.head || status.oid || "",
+      currentBranch: status.branch,
+      defaultBranch: branches.defaultBranch,
+    },
+    ...report,
+  };
+}
+
 function parseMergeTreeConflicts(result) {
   if (result.code === 0) {
     return { status: "clean", files: [] };
@@ -991,6 +1052,8 @@ module.exports = {
   analyticsSummary,
   hotspotSummary,
   ownershipSummary,
+  repositoryHealth,
+  listTrackedFileSizes,
   branchIntelligence,
   compareRefs,
   cherryPickPreview,

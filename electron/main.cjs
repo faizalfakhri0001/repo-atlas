@@ -18,6 +18,7 @@ const {
   analyticsSummary,
   hotspotSummary,
   ownershipSummary,
+  repositoryHealth,
   branchIntelligence,
   GitServiceError,
 } = require("./git-service.cjs");
@@ -108,6 +109,7 @@ function registerIpcHandlers() {
     "analytics:summary": (payload) => analyticsSummary(payload?.repositoryPath, payload ?? {}),
     "analytics:hotspots": (payload) => hotspotSummary(payload?.repositoryPath, payload ?? {}),
     "analytics:ownership": (payload) => ownershipSummary(payload?.repositoryPath, payload ?? {}),
+    "repository:health": (payload) => repositoryHealth(payload?.repositoryPath, payload ?? {}),
     "branches:intelligence": (payload) => branchIntelligence(payload?.repositoryPath, payload ?? {}),
   };
 

@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("repoAtlas", {
   analyticsSummary: (payload) => ipcRenderer.invoke("analytics:summary", payload),
   hotspots: (payload) => ipcRenderer.invoke("analytics:hotspots", payload),
   ownership: (payload) => ipcRenderer.invoke("analytics:ownership", payload),
+  repositoryHealth: (payload) => ipcRenderer.invoke("repository:health", payload),
   branchIntelligence: (payload) => ipcRenderer.invoke("branches:intelligence", payload),
   platform: process.platform,
 });

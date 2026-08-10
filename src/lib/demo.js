@@ -876,6 +876,102 @@ export function createDemoApi() {
     countObjects: { count: 132, "in-pack": 2481, size: 512, "size-pack": 3921 },
   });
 
+  const createDemoHealthSummary = (options = {}) => {
+    const nowTimestamp = Number.isFinite(Number(options.now))
+      ? Number(options.now)
+      : Date.parse(options.now ?? "") || Date.now();
+    const branches = createDemoBranchIntelligence(options);
+    const hotspots = createDemoHotspotSummary(commits, mainTip, { limit: 100, now: nowTimestamp });
+    const signals = [];
+    if (status.files.length > 0) {
+      signals.push({
+        id: "working-tree-dirty",
+        severity: "info",
+        category: "workingTree",
+        title: "Working tree has uncommitted changes",
+        description: "Changes on disk are shown in Workspace and do not change historical health metrics.",
+        metric: status.files.length,
+        penalty: 0,
+        action: { type: "navigate", payload: { view: "workspace" } },
+      });
+    }
+    const staleBranches = branches.branches.filter((branch) => !branch.remote && !branch.current && branch.stale);
+    if (staleBranches.length > 0) {
+      signals.push({
+        id: "stale-local-branches",
+        severity: "low",
+        category: "branches",
+        title: `${staleBranches.length} stale local branch${staleBranches.length === 1 ? "" : "es"}`,
+        description: "No commits were recorded on these branches in at least 90 days.",
+        metric: staleBranches.length,
+        penalty: Math.min(staleBranches.length, 10),
+        action: { type: "navigate", payload: { view: "branches", filter: "stale" } },
+        details: staleBranches.map((branch) => branch.name),
+      });
+    }
+    const concentrated = hotspots.files.filter((file) => file.hotspotBand === "High" && file.ownershipConcentration >= 0.8);
+    if (concentrated.length > 0) {
+      signals.push({
+        id: "concentrated-hotspots",
+        severity: "medium",
+        category: "ownership",
+        title: `${concentrated.length} high-churn file${concentrated.length === 1 ? " has" : "s have"} concentrated contribution`,
+        description: "Review the Ownership and Hotspots views for context on historical contribution concentration.",
+        metric: concentrated.length,
+        penalty: Math.min(concentrated.length * 2, 10),
+        action: { type: "navigate", payload: { view: "hotspots", filter: "concentrated" } },
+        details: concentrated.map((file) => file.path),
+      });
+    }
+    const orderedSignals = signals.sort((left, right) => left.category.localeCompare(right.category) || left.id.localeCompare(right.id));
+    const penalty = orderedSignals.reduce((total, signal) => total + signal.penalty, 0);
+    const categories = Object.fromEntries(["workingTree", "branches", "repository", "activity", "ownership"].map((category) => {
+      const categorySignals = orderedSignals.filter((signal) => signal.category === category);
+      const categoryPenalty = categorySignals.reduce((total, signal) => total + signal.penalty, 0);
+      return [category, {
+        score: Math.max(0, 100 - categoryPenalty),
+        penalty: categoryPenalty,
+        status: categorySignals.some((signal) => signal.severity === "medium" || signal.severity === "high") ? "attention" : "healthy",
+        signalCount: categorySignals.length,
+        signalIds: categorySignals.map((signal) => signal.id),
+      }];
+    }));
+    const score = Math.max(0, 100 - penalty);
+    return {
+      repositoryKey: "/demo/acme-storefront",
+      head: mainTip,
+      generatedAt: new Date(nowTimestamp).toISOString(),
+      repository: { name: "acme-storefront", rootPath: "/demo/acme-storefront", head: mainTip, currentBranch: "main", defaultBranch: "main" },
+      score,
+      grade: score < 70 ? "warning" : score < 90 || orderedSignals.some((signal) => signal.severity === "medium") ? "attention" : "healthy",
+      signals: orderedSignals.slice(0, 100),
+      categories,
+      facts: {
+        localBranchCount: branches.scope.totalLocal,
+        currentBranch: "main",
+        trackedFileCount: demoFiles.filter((file) => file.tracked).length,
+        largeFileCount: 0,
+        concentratedHotspotCount: concentrated.length,
+        lastCommitAt: commits[0]?.date ?? null,
+        dirtyFileCount: status.files.length,
+        conflictedFileCount: 0,
+        totalCommits: commits.length,
+        processedCommits: hotspots.scope.processedCommits,
+        analyticsTruncated: Boolean(hotspots.scope.sourceTruncated),
+        trackedFilesInspected: demoFiles.filter((file) => file.tracked).length,
+      },
+      scope: {
+        analytics: { maxCommits: hotspots.scope.maxCommits, processedCommits: hotspots.scope.processedCommits, truncated: Boolean(hotspots.scope.sourceTruncated) },
+        branches: { totalLocal: branches.scope.totalLocal, analyzedLocal: branches.scope.analyzedLocal, truncated: Boolean(branches.scope.truncated) },
+        trackedFiles: { totalEntries: demoFiles.filter((file) => file.tracked).length, inspectedEntries: demoFiles.filter((file) => file.tracked).length, truncated: false },
+        sourceTruncated: Boolean(hotspots.scope.sourceTruncated || branches.scope.truncated),
+        truncated: Boolean(hotspots.scope.truncated || branches.scope.truncated),
+        returnedSignals: orderedSignals.length,
+        signalLimit: 100,
+      },
+    };
+  };
+
   const searchDemoRepository = ({ query: rawQuery = "", types, limit = 100 } = {}) => {
     const query = parseSearchQuery(rawQuery);
     const value = query.text || query.path || query.branch || query.author || "";
@@ -978,6 +1074,7 @@ export function createDemoApi() {
     analyticsSummary: (payload = {}) => ok(createDemoAnalyticsSummary(commits, mainTip, payload)),
     hotspots: (payload = {}) => ok(createDemoHotspotSummary(commits, mainTip, payload)),
     ownership: (payload = {}) => ok(createDemoOwnershipSummary(commits, mainTip, payload)),
+    repositoryHealth: (payload = {}) => ok(createDemoHealthSummary(payload)),
     branchIntelligence: (payload = {}) => ok(createDemoBranchIntelligence(payload)),
     repositorySearch: (payload) => ok(searchDemoRepository(payload)),
     listRepositoryFiles: () => ok(demoFiles),
