@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Flame, LoaderCircle, RefreshCw, Search } from "lucide-react";
 import { api } from "@/lib/api";
-import { formatDate, formatRelativeDate } from "@/lib/utils";
+import { cn, formatDate, formatRelativeDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,49 @@ function HotspotScore({ file }) {
   );
 }
 
+function HotspotDetail({ file, onOpenFileHistory }) {
+  if (!file) return null;
+  return (
+    <aside className="border-t border-border bg-card/30 px-5 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-mono text-xs text-primary">{file.path}</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">Hotspot percentile {Math.round(Number(file.hotspotPercentile ?? 0) * 100)}%</div>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => onOpenFileHistory?.(file.path)}>
+          Open File History
+        </Button>
+      </div>
+      <div className="mt-4 grid gap-2 text-xs sm:grid-cols-4">
+        <div className="rounded-lg border border-border/70 bg-background/40 px-3 py-2"><div className="text-muted-foreground">Commits</div><div className="mt-1 font-medium tabular-nums">{metricValue(file.commitCount)}</div></div>
+        <div className="rounded-lg border border-border/70 bg-background/40 px-3 py-2"><div className="text-muted-foreground">Historical churn</div><div className="mt-1 font-medium tabular-nums">{metricValue(file.churn)}</div></div>
+        <div className="rounded-lg border border-border/70 bg-background/40 px-3 py-2"><div className="text-muted-foreground">Contributors</div><div className="mt-1 font-medium tabular-nums">{metricValue(file.authorCount)}</div></div>
+        <div className="rounded-lg border border-border/70 bg-background/40 px-3 py-2"><div className="text-muted-foreground">Last changed</div><div className="mt-1 font-medium">{file.lastChangedAt ? formatRelativeDate(file.lastChangedAt) : "—"}</div></div>
+      </div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <section>
+          <h3 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Activity over time</h3>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">{metricValue(file.commitCount)} commits changed this path; the score weights frequency, churn, and recency.</p>
+        </section>
+        <section>
+          <h3 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Top contributors</h3>
+          <div className="mt-2 space-y-1.5">
+            {(file.authors ?? []).slice(0, 5).map((author) => <div key={author.key ?? author.email ?? author.name} className="flex justify-between gap-3 text-xs"><span className="truncate">{author.name || author.email || "Unknown"}</span><span className="shrink-0 tabular-nums text-muted-foreground">{metricValue(author.commits)} commits</span></div>)}
+            {(file.authors ?? []).length === 0 && <div className="text-xs text-muted-foreground">No contributor identity recorded.</div>}
+          </div>
+        </section>
+        <section>
+          <h3 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Recent commits</h3>
+          <div className="mt-2 space-y-1.5">
+            {(file.recentCommits ?? []).slice(0, 5).map((commit) => <div key={commit.hash} className="flex gap-2 text-xs"><code className="shrink-0 text-muted-foreground">{commit.shortHash}</code><span className="min-w-0 truncate" title={commit.subject}>{commit.subject || "Untitled commit"}</span></div>)}
+            {(file.recentCommits ?? []).length === 0 && <div className="text-xs text-muted-foreground">No commit details in the current scope.</div>}
+          </div>
+        </section>
+      </div>
+    </aside>
+  );
+}
+
 export function HotspotsView({ repoPath, onOpenFileHistory }) {
   const [state, setState] = useState({ loading: true, error: null, data: null });
   const [includeGenerated, setIncludeGenerated] = useState(false);
@@ -50,6 +93,7 @@ export function HotspotsView({ repoPath, onOpenFileHistory }) {
   const [pathPrefix, setPathPrefix] = useState("");
   const [query, setQuery] = useState("");
   const [extension, setExtension] = useState("all");
+  const [selectedPath, setSelectedPath] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
@@ -114,6 +158,7 @@ export function HotspotsView({ repoPath, onOpenFileHistory }) {
 
   const scope = state.data?.scope ?? {};
   const filters = state.data?.filters ?? {};
+  const selectedFile = files.find((file) => file.path === selectedPath) ?? null;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -185,9 +230,9 @@ export function HotspotsView({ repoPath, onOpenFileHistory }) {
             </thead>
             <tbody>
               {files.map((file) => (
-                <tr key={file.path} className="border-b border-border/60 hover:bg-accent/30">
+                <tr key={file.path} className={cn("border-b border-border/60 hover:bg-accent/30", selectedPath === file.path && "bg-primary/5")} onClick={() => setSelectedPath(file.path)}>
                   <td className="max-w-[420px] px-5 py-3">
-                    <button type="button" className="block max-w-full truncate text-left font-mono text-[11px] text-primary hover:underline" onClick={() => onOpenFileHistory?.(file.path)} title="Open File History">
+                    <button type="button" className="block max-w-full truncate text-left font-mono text-[11px] text-primary hover:underline" onClick={() => { setSelectedPath(file.path); onOpenFileHistory?.(file.path); }} title="Open File History">
                       {file.path}
                     </button>
                     <div className="mt-1 text-[10px] text-muted-foreground">{metricValue(file.additions)} additions · {metricValue(file.deletions)} deletions</div>
@@ -204,6 +249,7 @@ export function HotspotsView({ repoPath, onOpenFileHistory }) {
             </tbody>
           </table>
         )}
+        <HotspotDetail file={selectedFile} onOpenFileHistory={onOpenFileHistory} />
       </div>
     </div>
   );

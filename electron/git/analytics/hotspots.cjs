@@ -225,13 +225,32 @@ function serializeHotspotFile(file) {
     hotspotScore: file.hotspotScore,
     hotspotPercentile: file.hotspotPercentile,
     hotspotBand: file.hotspotBand,
+    recentCommits: file.recentCommits,
   };
+}
+
+function recentCommitsForPath(index, filePath, limit = 5) {
+  if (!Array.isArray(index?.commits)) return [];
+  return index.commits
+    .filter((commit) => commit.files?.some((change) => change.path === filePath || change.oldPath === filePath))
+    .slice(0, limit)
+    .map((commit) => ({
+      hash: commit.hash,
+      shortHash: commit.hash?.slice(0, 8) ?? "",
+      subject: commit.subject,
+      author: commit.author,
+      authoredAt: commit.authoredAt,
+      files: commit.files.filter((change) => change.path === filePath || change.oldPath === filePath),
+    }));
 }
 
 function buildHotspotReport(index, options = {}) {
   const limit = normalizeHotspotLimit(options.limit);
   const activities = collectFileActivity(index);
-  const scored = scoreHotspotActivity(activities, { now: options.now ?? Date.now() });
+  const scored = scoreHotspotActivity(activities, { now: options.now ?? Date.now() }).map((file) => ({
+    ...file,
+    recentCommits: recentCommitsForPath(index, file.path),
+  }));
   const filtered = filterGeneratedFiles(scored, options);
   const sorted = filtered.files.slice().sort(compareHotspotFiles);
   const files = sorted.slice(0, limit).map(serializeHotspotFile);
@@ -295,6 +314,7 @@ module.exports = {
   isGeneratedPath,
   buildHotspotReport,
   compareHotspotFiles,
+  recentCommitsForPath,
   serializeHotspotFile,
   normalizeHotspotLimit,
   normalizePathPrefix,
