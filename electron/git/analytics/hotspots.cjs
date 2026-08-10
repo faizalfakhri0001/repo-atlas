@@ -9,6 +9,10 @@ function finiteNumber(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
+function calculateChurn(additions, deletions) {
+  return finiteNumber(additions) + finiteNumber(deletions);
+}
+
 function mapValues(value) {
   if (value instanceof Map) return [...value.values()];
   return Array.isArray(value) ? value : [];
@@ -34,7 +38,7 @@ function collectFileActivity(index) {
         commits: commitCount,
         additions,
         deletions,
-        churn: finiteNumber(file.churn, additions + deletions),
+        churn: calculateChurn(additions, deletions),
         authorCount: authors.length,
         authors,
         firstSeenAt: file.firstSeenAt ?? null,
@@ -65,6 +69,7 @@ module.exports = {
   MAX_HOTSPOT_LIMIT,
   RECENCY_WINDOW_DAYS,
   collectFileActivity,
+  calculateChurn,
   normalizeHotspotLimit,
   normalizePathPrefix,
   pathMatchesPrefix,

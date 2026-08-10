@@ -1,6 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { collectFileActivity } = require("../electron/git/analytics/hotspots.cjs");
+const { calculateChurn, collectFileActivity } = require("../electron/git/analytics/hotspots.cjs");
+
+test("calculateChurn is the sum of line additions and deletions", () => {
+  assert.equal(calculateChurn(14, 6), 20);
+  assert.equal(calculateChurn("4", "3"), 7);
+  assert.equal(calculateChurn(undefined, 3), 3);
+});
 
 test("collectFileActivity normalizes file metrics from the shared analytics index", () => {
   const index = {
