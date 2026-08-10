@@ -232,7 +232,7 @@ async function branchIntelligence(repositoryPath, options = {}) {
     defaultCommit = await resolveCommit(repository.rootPath, defaultBranchInfo.defaultBranchRef);
   }
 
-  const now = Date.now();
+  const now = options.now ?? Date.now();
   const localBranches = selectLocalBranches(metadata.branches, metadata.currentBranch);
   const localRefs = new Set(localBranches.map((branch) => branch.ref));
   const remoteBranches = metadata.branches.filter((branch) => branch.remote);
