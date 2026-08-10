@@ -488,6 +488,7 @@ function ViewHost({
           focusFilterRequest={fileFilterRequest}
           fileSelectionRequest={fileSelectionRequest}
           onHistoryStateChange={onFileHistoryChange}
+          onOpenCommit={onFocusCommit}
         />
       )}
       {view === "hotspots" && <HotspotsView repoPath={data.repository.rootPath} onOpenFileHistory={onOpenFileHistory} initialFilter={navigationRequest?.view === "hotspots" ? navigationRequest.payload?.filter : null} />}
