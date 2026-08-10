@@ -71,4 +71,28 @@ describe("FileExplorer", () => {
     expect(await screen.findByText("Binary file")).toBeInTheDocument();
     expect(screen.getAllByText("2.0 KB")).toHaveLength(2);
   });
+
+  it("labels a large file preview as truncated", async () => {
+    listRepositoryFiles.mockResolvedValueOnce({
+      ok: true,
+      data: [{ path: "logs/output.txt", name: "output.txt", extension: "txt", tracked: true }],
+    });
+    readRepositoryFile.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        path: "logs/output.txt",
+        text: "first chunk",
+        binary: false,
+        truncated: true,
+        size: 2 * 1024 * 1024,
+        language: null,
+      },
+    });
+    const user = userEvent.setup();
+    render(<FileExplorer repoPath="/workspace/repository" />);
+
+    await user.click(await screen.findByRole("treeitem", { name: "output.txt" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Preview truncated at 1 MB.");
+    expect(screen.getByText("first chunk")).toBeInTheDocument();
+  });
 });

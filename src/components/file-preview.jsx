@@ -67,6 +67,7 @@ export function FilePreview({ repoPath, node }) {
     return (
       <div className="flex h-full flex-col">
         <PreviewHeader node={node} data={state.data} />
+        {state.data?.truncated && <PreviewLimitNotice size={state.data.size} />}
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center text-sm text-muted-foreground">
           <ScanLine className="size-6" />
           <p className="font-medium text-foreground">Binary file</p>
@@ -81,6 +82,7 @@ export function FilePreview({ repoPath, node }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PreviewHeader node={node} data={state.data} />
+      {state.data?.truncated && <PreviewLimitNotice size={state.data.size} />}
       <div className="min-h-0 flex-1 overflow-auto bg-background/40">
         <pre className="min-w-fit font-mono text-[12px] leading-5">
           {lines.map((line, index) => (
@@ -97,6 +99,16 @@ export function FilePreview({ repoPath, node }) {
           ))}
         </pre>
       </div>
+    </div>
+  );
+}
+
+function PreviewLimitNotice({ size }) {
+  return (
+    <div role="status" className="flex shrink-0 items-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-500">
+      <FileWarning className="size-3.5 shrink-0" />
+      <span>Preview truncated at 1 MB.</span>
+      <span className="text-amber-500/70">{formatBytes(size)} total</span>
     </div>
   );
 }
