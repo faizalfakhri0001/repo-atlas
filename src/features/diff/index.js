@@ -7,4 +7,5 @@ export {
 } from "@/components/diff-view";
 export { parseUnifiedDiff, countDiffLines, limitDiffHunks } from "@/features/diff/diff-parser";
 export { alignSplitHunk, alignSplitDiff } from "@/features/diff/split-aligner";
-export { UnifiedDiff } from "@/features/diff/unified-diff";
+export { DiffMeta, UnifiedDiff } from "@/features/diff/unified-diff";
+export { SplitDiff } from "@/features/diff/split-diff";

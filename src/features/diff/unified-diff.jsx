@@ -16,7 +16,7 @@ const MARKER_STYLE = {
 
 const MARKER_CHAR = { add: "+", delete: "-", context: " ", note: " " };
 
-function DiffMeta({ meta }) {
+export function DiffMeta({ meta }) {
   if (!meta?.length) return null;
   return (
     <div className="border-b border-border/50 bg-muted/20 font-mono text-[11.5px] leading-[19px] text-muted-foreground">
