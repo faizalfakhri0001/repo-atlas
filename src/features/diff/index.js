@@ -1,10 +1,5 @@
-export {
-  CopyButton,
-  DiffStat,
-  DiffView,
-  FilePathLabel,
-  FileStatusBadge,
-} from "@/components/diff-view";
+export { DiffView } from "@/features/diff/diff-view";
+export { CopyButton, DiffStat, FilePathLabel, FileStatusBadge } from "@/features/diff/diff-ui";
 export { parseUnifiedDiff, countDiffLines, limitDiffHunks } from "@/features/diff/diff-parser";
 export { alignSplitHunk, alignSplitDiff } from "@/features/diff/split-aligner";
 export { DiffMeta, UnifiedDiff } from "@/features/diff/unified-diff";

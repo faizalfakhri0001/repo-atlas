@@ -1,9 +1,21 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DiffView } from "@/features/diff/diff-view";
 import { SplitDiff } from "@/features/diff/split-diff";
 import { UnifiedDiff } from "@/features/diff/unified-diff";
 
+const { fileDiff } = vi.hoisted(() => ({ fileDiff: vi.fn() }));
+
+vi.mock("@/lib/api", () => ({ api: { fileDiff } }));
+
 describe("diff renderers", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.clearAllMocks();
+  });
+  afterEach(() => cleanup());
+
   it("renders normalized metadata, hunk headers, line numbers, and markers", () => {
     render(
       <UnifiedDiff
@@ -54,5 +66,27 @@ describe("diff renderers", () => {
     expect(screen.getByText("new A")).toBeInTheDocument();
     expect(screen.getByText("new B")).toBeInTheDocument();
     expect(screen.getByText("new C")).toBeInTheDocument();
+  });
+
+  it("loads a diff and applies the selected display preferences", async () => {
+    fileDiff.mockResolvedValue({
+      ok: true,
+      data: {
+        diff: "diff --git a/app.js b/app.js\n@@ -1 +1 @@\n-return old;\n+return new;\n",
+        binary: false,
+        truncated: false,
+      },
+    });
+    const user = userEvent.setup();
+    render(<DiffView repoPath="/workspace/repository" request={{ type: "commit", path: "app.js", from: "a".repeat(40), to: "b".repeat(40) }} />);
+
+    expect(await screen.findByText("new")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Split/ }));
+    await user.click(screen.getByRole("button", { name: /Wrap/ }));
+    await user.click(screen.getByRole("button", { name: /Syntax/ }));
+
+    expect(screen.getByRole("table", { name: "Split diff" })).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("repo-atlas-diff-preferences-v1"))).toEqual({ mode: "split", wrap: true, syntaxHighlight: false });
+    expect(fileDiff).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository", type: "commit", path: "app.js", from: "a".repeat(40), to: "b".repeat(40) });
   });
 });
