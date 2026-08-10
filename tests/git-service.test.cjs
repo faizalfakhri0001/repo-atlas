@@ -17,6 +17,8 @@ const {
   parseMergeTreeConflicts,
   parseUpstreamTrack,
   scanRepository,
+  listRepositoryFiles,
+  parseRepositoryFileList,
   listCommits,
   getCommitDetails,
   getFileDiff,
@@ -110,6 +112,15 @@ test("parseUpstreamTrack reads ahead/behind/gone markers", () => {
   assert.deepEqual(parseUpstreamTrack(""), { ahead: 0, behind: 0, gone: false });
 });
 
+test("parseRepositoryFileList merges tracked and non-ignored paths", () => {
+  const files = parseRepositoryFileList("src/app.js\0package.json\0", "notes/todo.md\0src/app.js\0");
+  assert.deepEqual(files, [
+    { path: "notes/todo.md", name: "todo.md", extension: "md", tracked: false, size: null },
+    { path: "package.json", name: "package.json", extension: "json", tracked: true, size: null },
+    { path: "src/app.js", name: "app.js", extension: "js", tracked: true, size: null },
+  ]);
+});
+
 test("scanRepository integrates with a real local Git repository", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-test-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
@@ -134,6 +145,28 @@ test("scanRepository integrates with a real local Git repository", async (t) => 
   assert.ok(result.branches.some((branch) => branch.name === "feature/demo"));
   assert.ok(result.status.files.some((file) => file.path === "working.txt"));
   assert.ok(result.worktrees.length >= 1);
+});
+
+test("listRepositoryFiles follows Git ignore rules and reports tracked state", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-files-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+
+  const git = (...args) => execFileAsync("git", args, { cwd: root, encoding: "utf8" });
+  await git("init", "-b", "main");
+  await git("config", "user.name", "Repo Atlas Test");
+  await git("config", "user.email", "repo-atlas@example.test");
+  await fs.writeFile(path.join(root, ".gitignore"), "ignored.log\n");
+  await fs.writeFile(path.join(root, "tracked.js"), "export {}\n");
+  await fs.writeFile(path.join(root, "ignored.log"), "ignore me\n");
+  await fs.writeFile(path.join(root, "untracked.md"), "read me\n");
+  await git("add", ".gitignore", "tracked.js");
+  await git("commit", "-m", "Initial files");
+
+  const files = await listRepositoryFiles(root);
+  assert.deepEqual(files.map((file) => file.path), [".gitignore", "tracked.js", "untracked.md"]);
+  assert.equal(files.find((file) => file.path === "tracked.js").tracked, true);
+  assert.equal(files.find((file) => file.path === "untracked.md").tracked, false);
+  assert.equal(files.some((file) => file.path === "ignored.log"), false);
 });
 
 test("commit inspection, compare, and cherry-pick flows work end to end", async (t) => {

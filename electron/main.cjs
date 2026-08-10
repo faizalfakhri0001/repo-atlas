@@ -2,6 +2,7 @@ const path = require("node:path");
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const {
   scanRepository,
+  listRepositoryFiles,
   listCommits,
   getCommitDetails,
   getFileDiff,
@@ -78,6 +79,7 @@ function registerIpcHandlers() {
 
   const invokeHandlers = {
     "repository:scan": (payload) => scanRepository(payload?.repositoryPath ?? payload),
+    "repository:list-files": (payload) => listRepositoryFiles(payload?.repositoryPath ?? payload),
     "commits:list": (payload) => listCommits(payload?.repositoryPath, payload ?? {}),
     "commit:details": (payload) => getCommitDetails(payload?.repositoryPath, payload?.hash),
     "diff:file": (payload) => getFileDiff(payload?.repositoryPath, payload ?? {}),
