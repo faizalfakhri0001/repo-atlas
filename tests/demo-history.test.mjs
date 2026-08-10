@@ -1,0 +1,15 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createDemoApi } from "../src/lib/demo.js";
+
+test("demo API provides paginated file history entries", async () => {
+  const api = createDemoApi();
+  const response = await api.fileHistory({ path: "src/app.jsx", limit: 2, skip: 0 });
+
+  assert.equal(response.ok, true);
+  assert.equal(response.data.currentPath, "src/app.jsx");
+  assert.equal(response.data.entries.length, 2);
+  assert.equal(response.data.entries[0].path, "src/app.jsx");
+  assert.equal(typeof response.data.entries[0].hash, "string");
+  assert.equal(response.data.hasMore, true);
+});

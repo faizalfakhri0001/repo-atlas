@@ -13,6 +13,7 @@ const {
   resolveRepository,
 } = require("./git/core.cjs");
 const { listRepositoryFiles, parseRepositoryFileList, readRepositoryFile } = require("./git/files.cjs");
+const { listFileHistory } = require("./git/history.cjs");
 
 const DEFAULT_COMMIT_LIMIT = 1000;
 const MAX_COMMIT_LIMIT = 5000;
@@ -986,6 +987,7 @@ module.exports = {
   scanRepository,
   listRepositoryFiles,
   readRepositoryFile,
+  listFileHistory,
   listCommits,
   getCommitDetails,
   getFileDiff,

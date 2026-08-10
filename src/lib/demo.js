@@ -276,6 +276,36 @@ export function createDemoApi() {
     demoFileEntry("assets/logo.bin"),
     demoFileEntry("logs/output.txt"),
   ];
+  const historyFor = (filePath) => {
+    const entries = [];
+    for (const commit of commits) {
+      const file = filesForCommit(commit).find((candidate) => candidate.path === filePath);
+      if (!file) continue;
+      entries.push({
+        hash: commit.hash,
+        shortHash: commit.shortHash,
+        parentHash: commit.parents[0] ?? null,
+        subject: commit.subject,
+        author: { name: commit.author, email: commit.email },
+        date: commit.date,
+        status: file.status,
+        path: file.path,
+        ...(file.oldPath ? { oldPath: file.oldPath } : {}),
+      });
+    }
+    return entries.length > 0
+      ? entries
+      : commits.slice(0, 8).map((commit, index) => ({
+          hash: commit.hash,
+          shortHash: commit.shortHash,
+          parentHash: commit.parents[0] ?? null,
+          subject: commit.subject,
+          author: { name: commit.author, email: commit.email },
+          date: commit.date,
+          status: index === 0 ? "A" : "M",
+          path: filePath,
+        }));
+  };
 
   const localBranches = [
     { name: "main", tip: mainTip },
@@ -423,6 +453,18 @@ export function createDemoApi() {
         truncated,
         size: truncated ? 2 * 1024 * 1024 : text.length,
         language: demoFileLanguage(filePath),
+      });
+    },
+    fileHistory: ({ path: filePath, limit = 200, skip = 0 } = {}) => {
+      const knownFile = demoFiles.some((file) => file.path === filePath);
+      if (!knownFile) return Promise.resolve({ ok: false, error: { message: "Unknown demo file.", code: "PATH_NOT_FOUND" } });
+      const entries = historyFor(filePath);
+      const safeLimit = Math.min(Math.max(Number(limit) || 200, 1), 1000);
+      const safeSkip = Math.max(Number(skip) || 0, 0);
+      return ok({
+        currentPath: filePath,
+        entries: entries.slice(safeSkip, safeSkip + safeLimit),
+        hasMore: safeSkip + safeLimit < entries.length,
       });
     },
 
