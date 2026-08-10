@@ -6,10 +6,10 @@ import {
   Folder,
   FolderOpen,
   LoaderCircle,
-  SearchX,
+  Search,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { buildFileTree, collectDirectoryPaths, flattenVisibleTree } from "@/lib/file-tree";
+import { buildFileTree, collectDirectoryPaths, filterFileEntries, flattenVisibleTree } from "@/lib/file-tree";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,11 +22,13 @@ export function FileExplorer({ repoPath, onSelectFile }) {
   const [expandedPaths, setExpandedPaths] = useState(() => new Set());
   const [selectedPath, setSelectedPath] = useState(null);
   const [scrollTop, setScrollTop] = useState(0);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     setState({ loading: true, error: null, files: [] });
     setSelectedPath(null);
+    setQuery("");
     api
       .listRepositoryFiles({ repositoryPath: repoPath })
       .then((response) => {
@@ -45,19 +47,21 @@ export function FileExplorer({ repoPath, onSelectFile }) {
     };
   }, [repoPath]);
 
-  const tree = useMemo(() => buildFileTree(state.files), [state.files]);
+  const filteredFiles = useMemo(() => filterFileEntries(state.files, query), [state.files, query]);
+  const tree = useMemo(() => buildFileTree(filteredFiles), [filteredFiles]);
   const visibleRows = useMemo(() => flattenVisibleTree(tree, expandedPaths), [tree, expandedPaths]);
   const firstRow = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
   const lastRow = Math.min(visibleRows.length, Math.ceil((scrollTop + 560) / ROW_HEIGHT) + OVERSCAN);
   const renderedRows = visibleRows.slice(firstRow, lastRow);
 
   useEffect(() => {
-    if (state.files.length === 0) return;
+    if (filteredFiles.length === 0) return;
     setExpandedPaths((current) => {
+      if (query.trim()) return new Set(collectDirectoryPaths(tree));
       if (current.size > 0) return current;
       return new Set(collectDirectoryPaths(tree).filter((path) => path.split("/").length === 1));
     });
-  }, [state.files.length, tree]);
+  }, [filteredFiles.length, query, tree]);
 
   const toggleDirectory = (filePath) => {
     setExpandedPaths((current) => {
@@ -79,12 +83,22 @@ export function FileExplorer({ repoPath, onSelectFile }) {
         <div className="min-w-0">
           <h2 className="text-sm font-semibold leading-tight">Files</h2>
           <p className="text-[11px] text-muted-foreground">
-            {state.loading ? "Reading repository index…" : `${state.files.length.toLocaleString()} files`}
+            {state.loading
+              ? "Reading repository index…"
+              : query.trim()
+                ? `${filteredFiles.length.toLocaleString()} of ${state.files.length.toLocaleString()} files`
+                : `${state.files.length.toLocaleString()} files`}
           </p>
         </div>
         <div className="relative ml-auto w-56">
-          <SearchX className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input disabled placeholder="Filter files…" className="h-8 pl-8 text-xs" aria-label="Filter files" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filter files…"
+            className="h-8 pl-8 text-xs"
+            aria-label="Filter files"
+          />
         </div>
       </div>
 
@@ -96,7 +110,7 @@ export function FileExplorer({ repoPath, onSelectFile }) {
             </div>
           ) : state.error ? (
             <div className="m-4 rounded-lg border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400">{state.error}</div>
-          ) : state.files.length === 0 ? (
+          ) : filteredFiles.length === 0 ? (
             <div className="flex flex-1 items-center justify-center p-4 text-center text-sm text-muted-foreground">No files found.</div>
           ) : (
             <div

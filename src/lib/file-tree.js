@@ -107,6 +107,17 @@ export function flattenVisibleTree(root, expandedPaths = new Set()) {
   return rows;
 }
 
+export function filterFileEntries(files = [], query = "") {
+  const normalized = String(query).trim().toLowerCase();
+  if (!normalized) return files;
+  return files.filter((file) => {
+    const path = normalizeFilePath(file?.path).toLowerCase();
+    const name = String(file?.name ?? path.split("/").pop() ?? "").toLowerCase();
+    const extension = String(file?.extension ?? "").toLowerCase();
+    return path.includes(normalized) || name.includes(normalized) || extension.includes(normalized);
+  });
+}
+
 export function collectDirectoryPaths(root) {
   const paths = [];
   const visit = (node) => {

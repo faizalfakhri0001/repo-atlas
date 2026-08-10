@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildFileTree, collectDirectoryPaths, flattenVisibleTree } from "../src/lib/file-tree.js";
+import { buildFileTree, collectDirectoryPaths, filterFileEntries, flattenVisibleTree } from "../src/lib/file-tree.js";
 
 test("buildFileTree creates sorted directories and aggregates working changes", () => {
   const tree = buildFileTree([
@@ -33,4 +33,17 @@ test("flattenVisibleTree only includes children of expanded directories", () => 
     flattenVisibleTree(tree, new Set(["src", "src/lib"])).map(({ node }) => node.path),
     ["src", "src/lib", "src/lib/a.js", "src/app.js", "README.md"],
   );
+});
+
+test("filterFileEntries matches file name, path, and extension without reading content", () => {
+  const files = [
+    { path: "src/components/button.jsx", name: "button.jsx", extension: "jsx" },
+    { path: "docs/setup.md", name: "setup.md", extension: "md" },
+    { path: "package.json", name: "package.json", extension: "json" },
+  ];
+
+  assert.deepEqual(filterFileEntries(files, "BUTTON"), [files[0]]);
+  assert.deepEqual(filterFileEntries(files, "docs/"), [files[1]]);
+  assert.deepEqual(filterFileEntries(files, "json"), [files[2]]);
+  assert.deepEqual(filterFileEntries(files, ""), files);
 });

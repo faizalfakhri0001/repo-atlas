@@ -28,6 +28,10 @@ describe("FileExplorer", () => {
 
     await user.click(screen.getByRole("treeitem", { name: "src" }));
     expect(screen.queryByRole("treeitem", { name: "app.js" })).not.toBeInTheDocument();
+    const filter = screen.getByRole("textbox", { name: "Filter files" });
+    await user.type(filter, "README");
+    expect(screen.getByRole("treeitem", { name: "README.md" })).toBeInTheDocument();
+    expect(screen.queryByRole("treeitem", { name: "src" })).not.toBeInTheDocument();
     expect(listRepositoryFiles).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository" });
   });
 });
