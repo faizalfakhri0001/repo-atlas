@@ -1,4 +1,5 @@
 export const DEFAULT_VIEW = "overview";
+export const MAX_OPEN_SESSIONS = 10;
 
 function normalizeRepositoryPath(repositoryPath) {
   if (typeof repositoryPath !== "string") return null;
@@ -7,10 +8,12 @@ function normalizeRepositoryPath(repositoryPath) {
 }
 
 export function getSessionId(repositoryPath) {
-  return normalizeRepositoryPath(repositoryPath) ?? "demo";
+  const normalized = normalizeRepositoryPath(repositoryPath);
+  if (!normalized) return "demo";
+  return /^[A-Za-z]:[\\/]|^\\\\/.test(normalized) ? normalized.toLowerCase() : normalized;
 }
 
-function repositoryName(repositoryPath) {
+export function getRepositoryName(repositoryPath) {
   const normalized = normalizeRepositoryPath(repositoryPath);
   if (!normalized) return "Demo repository";
   return normalized.split(/[\\/]/).filter(Boolean).at(-1) ?? "Repository";
@@ -21,8 +24,9 @@ export function createRepositorySession(repositoryPath, lastActivatedAt = Date.n
   return {
     id: getSessionId(path),
     path,
-    name: repositoryName(path),
+    name: getRepositoryName(path),
     snapshot: null,
+    status: "created",
     loading: false,
     error: null,
     activeView: DEFAULT_VIEW,
@@ -35,12 +39,27 @@ export function createRepositorySession(repositoryPath, lastActivatedAt = Date.n
   };
 }
 
-export function createInitialWorkspaceState() {
+export function createInitialWorkspaceState({ openPaths = [], activePath = null, recentRepositories = [], lastActivatedAt = Date.now() } = {}) {
+  const sessions = [];
+  const seen = new Set();
+  for (const path of openPaths) {
+    const session = createRepositorySession(path, lastActivatedAt);
+    if (seen.has(session.id)) continue;
+    seen.add(session.id);
+    sessions.push(session);
+  }
+
+  const activeSessionId = activePath && seen.has(getSessionId(activePath)) ? getSessionId(activePath) : null;
   return {
-    activeSessionId: null,
-    sessions: [],
-    recentRepositories: [],
+    activeSessionId,
+    sessions,
+    recentRepositories: Array.isArray(recentRepositories) ? recentRepositories : [],
   };
+}
+
+export function findRepositorySession(state, repositoryPath) {
+  const sessionId = getSessionId(repositoryPath);
+  return state.sessions.find((session) => session.id === sessionId || getSessionId(session.path) === sessionId) ?? null;
 }
 
 function findSession(state, sessionId) {
@@ -61,68 +80,140 @@ function updateSession(state, sessionId, update) {
 }
 
 function ensureSession(state, repositoryPath, lastActivatedAt) {
-  const sessionId = getSessionId(repositoryPath);
-  if (findSession(state, sessionId)) return { state, sessionId };
+  const existing = findRepositorySession(state, repositoryPath);
+  if (existing) return { state, sessionId: existing.id };
 
+  const session = createRepositorySession(repositoryPath, lastActivatedAt);
   return {
-    state: {
-      ...state,
-      sessions: [...state.sessions, createRepositorySession(repositoryPath, lastActivatedAt)],
-    },
-    sessionId,
+    state: { ...state, sessions: [...state.sessions, session] },
+    sessionId: session.id,
   };
+}
+
+function startSession(state, sessionId, lastActivatedAt) {
+  return updateSession(state, sessionId, (session) => ({
+    ...session,
+    status: "loading",
+    loading: true,
+    error: null,
+    lastActivatedAt,
+  }));
+}
+
+function replaceSession(sessions, sessionId, nextSession) {
+  const index = sessions.findIndex((session) => session.id === sessionId);
+  if (index < 0) return [...sessions, nextSession];
+  const nextSessions = sessions.slice();
+  nextSessions[index] = nextSession;
+  return nextSessions;
+}
+
+function applyLoadSuccess(state, action) {
+  const timestamp = action.lastActivatedAt ?? Date.now();
+  const requestedPath = action.repositoryPath ?? action.data?.repository?.rootPath;
+  const ensured = ensureSession(state, requestedPath, timestamp);
+  const requestedSession = findSession(ensured.state, ensured.sessionId);
+  const repository = action.data?.repository ?? {};
+  const canonicalPath = normalizeRepositoryPath(repository.rootPath) ?? requestedSession?.path ?? requestedPath;
+  const canonicalId = getSessionId(canonicalPath);
+  const existingCanonical = findSession(ensured.state, canonicalId);
+  const baseSession = existingCanonical && existingCanonical.id !== ensured.sessionId ? existingCanonical : requestedSession;
+  const sessionsWithoutRequested =
+    existingCanonical && existingCanonical.id !== ensured.sessionId
+      ? ensured.state.sessions.filter((session) => session.id !== ensured.sessionId)
+      : ensured.state.sessions;
+
+  const nextSession = {
+    ...(baseSession ?? createRepositorySession(canonicalPath, timestamp)),
+    id: canonicalId,
+    path: canonicalPath,
+    name: repository.name ?? baseSession?.name ?? getRepositoryName(canonicalPath),
+    snapshot: action.data ?? null,
+    status: "ready",
+    loading: false,
+    error: null,
+    lastActivatedAt: timestamp,
+  };
+
+  const sessions = replaceSession(
+    sessionsWithoutRequested.map((session) => (session.id === ensured.sessionId ? { ...session, id: canonicalId } : session)),
+    canonicalId,
+    nextSession,
+  );
+  return { ...ensured.state, activeSessionId: canonicalId, sessions };
+}
+
+function applyLoadError(state, action) {
+  const timestamp = action.lastActivatedAt ?? Date.now();
+  const ensured = ensureSession(state, action.repositoryPath, timestamp);
+  const nextState = updateSession(ensured.state, ensured.sessionId, (session) => ({
+    ...session,
+    status: session.snapshot ? "stale" : "error",
+    loading: false,
+    error: action.error ?? { message: "Repository scan failed.", code: "SCAN_FAILED" },
+    lastActivatedAt: timestamp,
+  }));
+  return { ...nextState, activeSessionId: ensured.sessionId };
 }
 
 export function workspaceReducer(state, action) {
   switch (action.type) {
+    case "SESSION_OPEN_REQUEST":
     case "session/load-start": {
-      const lastActivatedAt = action.lastActivatedAt ?? Date.now();
-      const ensured = ensureSession(state, action.repositoryPath, lastActivatedAt);
-      const nextState = updateSession(ensured.state, ensured.sessionId, (session) => ({
-        ...session,
-        path: normalizeRepositoryPath(action.repositoryPath) ?? session.path,
-        loading: true,
-        error: null,
-        lastActivatedAt,
-      }));
+      const timestamp = action.lastActivatedAt ?? Date.now();
+      const ensured = ensureSession(state, action.repositoryPath, timestamp);
+      const existing = findSession(ensured.state, ensured.sessionId);
+      if (existing?.status === "ready" && !action.forceReload) {
+        return workspaceReducer(ensured.state, { type: "SESSION_ACTIVATE", sessionId: ensured.sessionId, lastActivatedAt: timestamp });
+      }
+      const nextState = startSession(ensured.state, ensured.sessionId, timestamp);
       return { ...nextState, activeSessionId: ensured.sessionId };
     }
 
-    case "session/load-success": {
-      const repositoryPath = action.repositoryPath ?? action.data?.repository?.rootPath;
-      const ensured = ensureSession(state, repositoryPath, action.lastActivatedAt ?? Date.now());
-      const repository = action.data?.repository ?? {};
-      const nextState = updateSession(ensured.state, ensured.sessionId, (session) => ({
-        ...session,
-        path: repository.rootPath ?? session.path,
-        name: repository.name ?? session.name,
-        snapshot: action.data ?? null,
-        loading: false,
-        error: null,
-        lastActivatedAt: action.lastActivatedAt ?? session.lastActivatedAt,
-      }));
-      return { ...nextState, activeSessionId: ensured.sessionId };
+    case "SESSION_OPEN_SUCCESS":
+    case "SESSION_REFRESH_SUCCESS":
+    case "session/load-success":
+      return applyLoadSuccess(state, action);
+
+    case "SESSION_OPEN_ERROR":
+    case "SESSION_REFRESH_ERROR":
+    case "session/load-failure":
+      return applyLoadError(state, action);
+
+    case "SESSION_REFRESH_REQUEST": {
+      const session = findSession(state, action.sessionId);
+      if (!session) return state;
+      const timestamp = action.lastActivatedAt ?? Date.now();
+      const nextState = startSession(state, session.id, timestamp);
+      return { ...nextState, activeSessionId: session.id };
     }
 
-    case "session/load-failure": {
-      const ensured = ensureSession(state, action.repositoryPath, action.lastActivatedAt ?? Date.now());
-      const nextState = updateSession(ensured.state, ensured.sessionId, (session) => ({
-        ...session,
-        loading: false,
-        error: action.error ?? { message: "Repository scan failed.", code: "SCAN_FAILED" },
-        lastActivatedAt: action.lastActivatedAt ?? session.lastActivatedAt,
-      }));
-      return { ...nextState, activeSessionId: ensured.sessionId };
-    }
-
+    case "SESSION_ACTIVATE":
     case "session/activate": {
-      if (!findSession(state, action.sessionId)) return state;
-      const lastActivatedAt = action.lastActivatedAt ?? Date.now();
-      return {
-        ...updateSession(state, action.sessionId, (session) => ({ ...session, lastActivatedAt })),
-        activeSessionId: action.sessionId,
-      };
+      const session = findSession(state, action.sessionId);
+      if (!session) return state;
+      const timestamp = action.lastActivatedAt ?? Date.now();
+      let nextState = state;
+      if (state.activeSessionId && state.activeSessionId !== session.id) {
+        nextState = updateSession(nextState, state.activeSessionId, (current) => ({
+          ...current,
+          ui: { ...current.ui, cherryPick: null },
+        }));
+      }
+      nextState = updateSession(nextState, session.id, (current) => ({ ...current, lastActivatedAt: timestamp }));
+      return { ...nextState, activeSessionId: session.id };
     }
+
+    case "SESSION_CLOSE": {
+      if (!findSession(state, action.sessionId)) return state;
+      const sessions = state.sessions.filter((session) => session.id !== action.sessionId);
+      if (state.activeSessionId !== action.sessionId) return { ...state, sessions };
+      const nextActive = sessions.slice().sort((a, b) => b.lastActivatedAt - a.lastActivatedAt)[0] ?? null;
+      return { ...state, sessions, activeSessionId: nextActive?.id ?? null };
+    }
+
+    case "SESSION_MARK_STALE":
+      return updateSession(state, action.sessionId, (session) => ({ ...session, status: "stale" }));
 
     case "session/set-view": {
       const sessionId = action.sessionId ?? state.activeSessionId;

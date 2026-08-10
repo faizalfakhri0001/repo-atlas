@@ -43,9 +43,47 @@ test("workspace reducer keeps repository data and view state inside a session", 
 
 test("new sessions start with isolated navigation state", () => {
   const session = createRepositorySession("C:\\work\\repo", 10);
-  assert.equal(session.id, "C:\\work\\repo");
+  assert.equal(session.id, "c:\\work\\repo");
   assert.equal(session.name, "repo");
   assert.equal(session.activeView, "overview");
   assert.deepEqual(session.ui, { graphRequest: null, compareInit: null, cherryPick: null });
   assert.equal(session.lastActivatedAt, 10);
+});
+
+test("session lifecycle canonicalizes repository roots and prevents duplicate tabs", () => {
+  let state = createInitialWorkspaceState();
+  state = workspaceReducer(state, {
+    type: "SESSION_OPEN_REQUEST",
+    repositoryPath: "/workspace/repository/src",
+    lastActivatedAt: 1,
+  });
+  assert.equal(state.sessions[0].status, "loading");
+
+  state = workspaceReducer(state, {
+    type: "SESSION_OPEN_SUCCESS",
+    repositoryPath: "/workspace/repository/src",
+    data: { repository: { rootPath: "/workspace/repository", name: "repository", currentBranch: "main", dirty: true } },
+    lastActivatedAt: 2,
+  });
+  assert.equal(state.sessions.length, 1);
+  assert.equal(state.sessions[0].id, "/workspace/repository");
+  assert.equal(state.sessions[0].status, "ready");
+
+  state = workspaceReducer(state, {
+    type: "SESSION_OPEN_REQUEST",
+    repositoryPath: "/workspace/repository",
+    lastActivatedAt: 3,
+  });
+  assert.equal(state.sessions.length, 1);
+  assert.equal(state.activeSessionId, "/workspace/repository");
+
+  state = workspaceReducer(state, {
+    type: "SESSION_OPEN_REQUEST",
+    repositoryPath: "/workspace/other",
+    lastActivatedAt: 4,
+  });
+  assert.equal(state.sessions.length, 2);
+  state = workspaceReducer(state, { type: "SESSION_CLOSE", sessionId: "/workspace/other" });
+  assert.equal(state.sessions.length, 1);
+  assert.equal(state.activeSessionId, "/workspace/repository");
 });

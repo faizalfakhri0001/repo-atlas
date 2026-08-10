@@ -1,6 +1,7 @@
 import { useMemo, useReducer } from "react";
 import {
   createInitialWorkspaceState,
+  findRepositorySession,
   workspaceReducer,
 } from "./workspace-reducer";
 
@@ -8,7 +9,10 @@ export {
   DEFAULT_VIEW,
   createInitialWorkspaceState,
   createRepositorySession,
+  findRepositorySession,
   getSessionId,
+  getRepositoryName,
+  MAX_OPEN_SESSIONS,
   workspaceReducer,
 } from "./workspace-reducer";
 
@@ -21,10 +25,15 @@ export function useWorkspaceStore() {
 
   const actions = useMemo(
     () => ({
+      openRepository: (repositoryPath, forceReload = false) => dispatch({ type: "SESSION_OPEN_REQUEST", repositoryPath, forceReload }),
       startLoading: (repositoryPath) => dispatch({ type: "session/load-start", repositoryPath }),
-      loadSucceeded: (repositoryPath, data) => dispatch({ type: "session/load-success", repositoryPath, data }),
-      loadFailed: (repositoryPath, error) => dispatch({ type: "session/load-failure", repositoryPath, error }),
+      loadSucceeded: (repositoryPath, data) => dispatch({ type: "SESSION_OPEN_SUCCESS", repositoryPath, data }),
+      loadFailed: (repositoryPath, error) => dispatch({ type: "SESSION_OPEN_ERROR", repositoryPath, error }),
+      refreshRepository: (sessionId) => dispatch({ type: "SESSION_REFRESH_REQUEST", sessionId }),
+      refreshSucceeded: (repositoryPath, data) => dispatch({ type: "SESSION_REFRESH_SUCCESS", repositoryPath, data }),
+      refreshFailed: (repositoryPath, error) => dispatch({ type: "SESSION_REFRESH_ERROR", repositoryPath, error }),
       activateSession: (sessionId) => dispatch({ type: "session/activate", sessionId }),
+      closeRepository: (sessionId) => dispatch({ type: "SESSION_CLOSE", sessionId }),
       setActiveView: (view) => dispatch({ type: "session/set-view", view }),
       setGraphRequest: (request) => dispatch({ type: "session/set-graph-request", request }),
       setCompareInit: (initial) => dispatch({ type: "session/set-compare-init", initial }),
@@ -33,5 +42,5 @@ export function useWorkspaceStore() {
     [],
   );
 
-  return { state, activeSession, actions };
+  return { state, activeSession, actions, findRepository: (repositoryPath) => findRepositorySession(state, repositoryPath) };
 }
