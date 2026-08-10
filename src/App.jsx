@@ -103,7 +103,7 @@ function App() {
 
   const focusCommitInGraph = useCallback(
     (hash) => {
-      actions.setGraphRequest({ focusHash: hash, nonce: Date.now() });
+      actions.setGraphRequest({ refs: null, focusHash: hash, nonce: Date.now() });
       actions.setActiveView("commits");
     },
     [actions],
@@ -111,7 +111,7 @@ function App() {
 
   const focusAuthorInGraph = useCallback(
     (author) => {
-      actions.setGraphRequest({ query: author, nonce: Date.now() });
+      actions.setGraphRequest({ refs: null, query: author, nonce: Date.now() });
       actions.setActiveView("commits");
     },
     [actions],
