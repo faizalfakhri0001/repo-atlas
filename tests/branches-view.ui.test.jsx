@@ -140,6 +140,7 @@ describe("BranchesView", () => {
   it("loads branch intelligence and filters, sorts, and opens divergence details", async () => {
     vi.spyOn(api, "branchIntelligence").mockResolvedValue({ ok: true, data: report });
     const onCompareWithDefault = vi.fn();
+    const onShowInGraph = vi.fn();
     const user = userEvent.setup();
 
     render(
@@ -150,6 +151,7 @@ describe("BranchesView", () => {
           currentBranch="main"
           defaultBranch="main"
           onCompareWithDefault={onCompareWithDefault}
+          onShowInGraph={onShowInGraph}
         />
       </TooltipProvider>,
     );
@@ -166,6 +168,8 @@ describe("BranchesView", () => {
 
     await user.click(screen.getByRole("button", { name: "Compare feature/diverged with default main" }));
     expect(onCompareWithDefault).toHaveBeenCalledWith("main", "feature/diverged");
+    await user.click(screen.getByRole("button", { name: "Open commits for feature/diverged" }));
+    expect(onShowInGraph).toHaveBeenCalledWith("feature/diverged");
 
     await user.click(screen.getByRole("tab", { name: "Divergence" }));
     expect(screen.getByText(/Divergence from/)).toBeInTheDocument();

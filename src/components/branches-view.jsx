@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, GitBranch, GitCompareArrows, GitGraph, History, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, GitBranch, GitCommitHorizontal, GitCompareArrows, GitGraph, History, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn, formatRelativeDate } from "@/lib/utils";
 import { AuthorAvatar } from "@/components/author-avatar";
@@ -425,6 +425,19 @@ export function BranchesView({
                           <TooltipContent>Compare with Current</TooltipContent>
                         </Tooltip>
                       )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label={`Open commits for ${branch.name}`}
+                            onClick={() => onShowInGraph?.(branch.name)}
+                            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          >
+                            <GitCommitHorizontal className="size-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>Open commits</TooltipContent>
+                      </Tooltip>
                     </div>
                   </td>
                 </tr>
