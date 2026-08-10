@@ -1,0 +1,113 @@
+import { useEffect, useMemo, useState } from "react";
+import { FileWarning, LoaderCircle, ScanLine } from "lucide-react";
+import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { CopyButton, FilePathLabel, FileStatusBadge } from "@/components/diff-view";
+
+function formatBytes(value) {
+  if (value == null) return "—";
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function lineNumberWidth(lineCount) {
+  return `${Math.max(2, String(lineCount).length)}ch`;
+}
+
+export function FilePreview({ repoPath, node }) {
+  const [state, setState] = useState({ loading: false, error: null, data: null });
+  const requestKey = useMemo(() => `${repoPath ?? ""}\u0000${node?.path ?? ""}`, [repoPath, node?.path]);
+
+  useEffect(() => {
+    if (!node) {
+      setState({ loading: false, error: null, data: null });
+      return undefined;
+    }
+
+    let cancelled = false;
+    setState({ loading: true, error: null, data: null });
+    api
+      .readRepositoryFile({ repositoryPath: repoPath, path: node.path })
+      .then((response) => {
+        if (cancelled) return;
+        if (!response?.ok) {
+          setState({ loading: false, error: response?.error?.message ?? "Failed to read repository file.", data: null });
+          return;
+        }
+        setState({ loading: false, error: null, data: response.data ?? null });
+      })
+      .catch((error) => {
+        if (!cancelled) setState({ loading: false, error: error?.message ?? "Failed to read repository file.", data: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [repoPath, requestKey, node]);
+
+  if (!node) {
+    return <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">Select a file to preview its contents.</div>;
+  }
+  if (state.loading) {
+    return (
+      <div className="flex h-full items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
+        <LoaderCircle className="size-4 animate-spin" /> Reading {node.path}…
+      </div>
+    );
+  }
+  if (state.error) {
+    return (
+      <div className="flex h-full items-center justify-center gap-2 p-8 text-center text-sm text-red-400">
+        <FileWarning className="size-4 shrink-0" /> {state.error}
+      </div>
+    );
+  }
+  if (state.data?.binary) {
+    return (
+      <div className="flex h-full flex-col">
+        <PreviewHeader node={node} data={state.data} />
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center text-sm text-muted-foreground">
+          <ScanLine className="size-6" />
+          Binary file — no text preview available.
+          <span className="text-xs">{formatBytes(state.data.size)}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const lines = String(state.data?.text ?? "").split("\n");
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <PreviewHeader node={node} data={state.data} />
+      <div className="min-h-0 flex-1 overflow-auto bg-background/40">
+        <pre className="min-w-fit font-mono text-[12px] leading-5">
+          {lines.map((line, index) => (
+            <div key={index} className="flex min-h-5 hover:bg-accent/40">
+              <span
+                aria-hidden="true"
+                className="sticky left-0 w-14 shrink-0 select-none border-r border-border/50 bg-background/80 px-3 text-right tabular-nums text-muted-foreground/60"
+                style={{ minWidth: `calc(${lineNumberWidth(lines.length)} + 3rem)` }}
+              >
+                {index + 1}
+              </span>
+              <code className="whitespace-pre px-4 text-foreground/90">{line || " "}</code>
+            </div>
+          ))}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+function PreviewHeader({ node, data }) {
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
+      <FilePathLabel path={node.path} className="min-w-0 flex-1 text-xs" />
+      {node.status && <FileStatusBadge status={node.status} />}
+      {data?.language && <Badge variant="muted">{data.language}</Badge>}
+      {data?.size != null && <span className="shrink-0 text-[11px] text-muted-foreground">{formatBytes(data.size)}</span>}
+      <CopyButton value={node.path} title="Copy path" />
+    </div>
+  );
+}

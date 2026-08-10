@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { FileStatusBadge } from "@/components/diff-view";
+import { FilePreview } from "@/components/file-preview";
 
 const ROW_HEIGHT = 28;
 const OVERSCAN = 8;
@@ -27,6 +28,7 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
   const [state, setState] = useState({ loading: true, error: null, files: [] });
   const [expandedPaths, setExpandedPaths] = useState(() => new Set());
   const [selectedPath, setSelectedPath] = useState(null);
+  const [selectedNode, setSelectedNode] = useState(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [query, setQuery] = useState("");
 
@@ -34,6 +36,7 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
     let cancelled = false;
     setState({ loading: true, error: null, files: [] });
     setSelectedPath(null);
+    setSelectedNode(null);
     setQuery("");
     api
       .listRepositoryFiles({ repositoryPath: repoPath })
@@ -81,6 +84,7 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
 
   const selectFile = (node) => {
     setSelectedPath(node.path);
+    setSelectedNode(node);
     onSelectFile?.(node);
   };
 
@@ -170,9 +174,7 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
         </aside>
 
         <main className="min-w-0 flex-1">
-          <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
-            Select a file to preview its contents.
-          </div>
+          <FilePreview repoPath={repoPath} node={selectedNode} />
         </main>
       </div>
     </div>

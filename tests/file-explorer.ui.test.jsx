@@ -3,10 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { FileExplorer } from "@/components/file-explorer";
 
-const { listRepositoryFiles } = vi.hoisted(() => ({ listRepositoryFiles: vi.fn() }));
+const { listRepositoryFiles, readRepositoryFile } = vi.hoisted(() => ({
+  listRepositoryFiles: vi.fn(),
+  readRepositoryFile: vi.fn(),
+}));
 
 vi.mock("@/lib/api", () => ({
-  api: { listRepositoryFiles },
+  api: { listRepositoryFiles, readRepositoryFile },
 }));
 
 describe("FileExplorer", () => {
@@ -18,6 +21,10 @@ describe("FileExplorer", () => {
         { path: "src/lib/api.js", name: "api.js", extension: "js", tracked: true },
         { path: "README.md", name: "README.md", extension: "md", tracked: true },
       ],
+    });
+    readRepositoryFile.mockResolvedValueOnce({
+      ok: true,
+      data: { path: "src/app.js", text: "const answer = 42;\n", binary: false, truncated: false, size: 20, language: "javascript" },
     });
     const user = userEvent.setup();
     render(
@@ -31,6 +38,11 @@ describe("FileExplorer", () => {
     expect(await screen.findByRole("treeitem", { name: "src" })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("treeitem", { name: "app.js" })).toBeInTheDocument();
     expect(screen.getByTitle("modified")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("treeitem", { name: "app.js" }));
+    expect(await screen.findByText("const answer = 42;")).toBeInTheDocument();
+    expect(screen.getByText("javascript")).toBeInTheDocument();
+    expect(readRepositoryFile).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository", path: "src/app.js" });
 
     await user.click(screen.getByRole("treeitem", { name: "src" }));
     expect(screen.queryByRole("treeitem", { name: "app.js" })).not.toBeInTheDocument();
