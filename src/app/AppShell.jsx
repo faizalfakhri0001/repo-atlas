@@ -447,7 +447,7 @@ function ViewHost({
       <div className={cn("h-full", view !== "compare" && "hidden")}>
         <CompareView data={data} initial={compareInit} onCherryPick={onCherryPick} />
       </div>
-      {view === "overview" && <Overview data={data} onOpenCommit={onFocusCommit} />}
+      {view === "overview" && <Overview data={data} onOpenCommit={onFocusCommit} onOpenHealth={() => onNavigate("health")} />}
       {view === "branches" && (
         <BranchesView
           repoPath={data.repository.rootPath}

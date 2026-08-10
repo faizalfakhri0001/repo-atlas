@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatDate, formatRelativeDate, truncateMiddle } from "@/lib/utils";
+import { HealthSummaryCard } from "@/components/health-card";
 
 function MetricCard({ icon: Icon, label, value, detail }) {
   return (
@@ -68,7 +69,7 @@ function ActivityChart({ commits }) {
   );
 }
 
-export function Overview({ data, onOpenCommit }) {
+export function Overview({ data, onOpenCommit, onOpenHealth }) {
   const localBranches = data.branches.filter((branch) => !branch.remote);
   const remoteBranches = data.branches.filter((branch) => branch.remote);
   const recent = data.commits.slice(0, 8);
@@ -86,6 +87,8 @@ export function Overview({ data, onOpenCommit }) {
         <MetricCard icon={Workflow} label="Worktrees" value={data.worktrees.length} detail={`${data.submodules.length} submodules`} />
         <MetricCard icon={CircleDot} label="Working changes" value={data.status.files.length} detail={data.repository.dirty ? "Repository is dirty" : "Working tree is clean"} />
       </div>
+
+      <HealthSummaryCard repoPath={data.repository.rootPath} revision={data.scannedAt} onOpenDetails={onOpenHealth} />
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)]">
         <Card className="min-w-0">
