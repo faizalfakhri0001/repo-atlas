@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, isDemo } from "@/lib/api";
 import { AppShell } from "@/app/AppShell";
-import { useWorkspaceStore } from "@/app/workspace-store";
+import { MAX_OPEN_SESSIONS, useWorkspaceStore } from "@/app/workspace-store";
 
 function App() {
-  const { activeSession, actions } = useWorkspaceStore();
+  const { state, activeSession, actions, findRepository } = useWorkspaceStore();
   const data = activeSession?.snapshot ?? null;
   const [theme, setTheme] = useState(() => localStorage.getItem("repo-atlas-theme") || "dark");
   const initialized = useRef(false);
@@ -15,41 +15,54 @@ function App() {
   }, [theme]);
 
   const loadRepository = useCallback(
-    async (repositoryPath) => {
-      actions.startLoading(repositoryPath);
+    async (repositoryPath, { forceReload = false, refresh = false, sessionId = null } = {}) => {
+      const existing = sessionId ? state.sessions.find((session) => session.id === sessionId) : findRepository(repositoryPath);
+      if (existing?.status === "ready" && !forceReload && !refresh) {
+        actions.activateSession(existing.id);
+        return;
+      }
+
+      if (refresh && sessionId) actions.refreshRepository(sessionId);
+      else actions.openRepository(repositoryPath, forceReload);
       try {
         const response = await api.scanRepository(repositoryPath);
         if (!response?.ok) {
-          actions.loadFailed(repositoryPath, response?.error || { message: "Repository scan failed.", code: "SCAN_FAILED" });
+          if (refresh) actions.refreshFailed(repositoryPath, response?.error || { message: "Repository scan failed.", code: "SCAN_FAILED" });
+          else actions.loadFailed(repositoryPath, response?.error || { message: "Repository scan failed.", code: "SCAN_FAILED" });
           return;
         }
-        actions.loadSucceeded(repositoryPath, response.data);
-        localStorage.setItem("repo-atlas-last-repository", response.data.repository.rootPath);
+        if (refresh) actions.refreshSucceeded(repositoryPath, response.data);
+        else actions.loadSucceeded(repositoryPath, response.data);
       } catch (scanError) {
-        actions.loadFailed(repositoryPath, {
+        const error = {
           message: scanError?.message || "Repository scan failed.",
           code: "SCAN_FAILED",
-        });
+        };
+        if (refresh) actions.refreshFailed(repositoryPath, error);
+        else actions.loadFailed(repositoryPath, error);
       }
     },
-    [actions],
+    [actions, findRepository, state.sessions],
   );
 
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-    const recentPath = localStorage.getItem("repo-atlas-last-repository");
-    if (recentPath || isDemo) loadRepository(recentPath ?? undefined);
-  }, [loadRepository]);
+    if (isDemo) loadRepository(undefined);
+    else if (activeSession?.status === "created" && activeSession.path) loadRepository(activeSession.path);
+  }, [activeSession, isDemo, loadRepository]);
 
   const handleOpen = async () => {
+    if (state.sessions.length >= MAX_OPEN_SESSIONS && !window.confirm("Opening more than 10 repositories may increase memory usage. Continue?")) {
+      return;
+    }
     const repositoryPath = await api.openRepository();
     if (repositoryPath) await loadRepository(repositoryPath);
   };
 
   const handleRefresh = useCallback(() => {
-    if (data?.repository?.rootPath) loadRepository(data.repository.rootPath);
-  }, [data, loadRepository]);
+    if (activeSession?.path) loadRepository(activeSession.path, { refresh: true, sessionId: activeSession.id });
+  }, [activeSession, loadRepository]);
 
   const openCompare = useCallback(
     (base, head) => {
@@ -87,6 +100,8 @@ function App() {
   return (
     <AppShell
       session={activeSession}
+      sessions={state.sessions}
+      activeSessionId={state.activeSessionId}
       theme={theme}
       onThemeChange={setTheme}
       onOpen={handleOpen}
@@ -98,6 +113,8 @@ function App() {
       onFocusCommit={focusCommitInGraph}
       onShowWorkspace={showWorkspace}
       onClearCherryPick={() => actions.setCherryPick(null)}
+      onActivateRepository={actions.activateSession}
+      onCloseRepository={actions.closeRepository}
     />
   );
 }

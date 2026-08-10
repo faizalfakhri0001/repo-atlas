@@ -21,6 +21,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { api, isDemo } from "@/lib/api";
+import { RepositoryTabs } from "@/app/RepositoryTabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -49,6 +50,8 @@ const NAV_ITEMS = [
 
 export function AppShell({
   session,
+  sessions = [],
+  activeSessionId,
   theme,
   onThemeChange,
   onOpen,
@@ -60,6 +63,8 @@ export function AppShell({
   onFocusCommit,
   onShowWorkspace,
   onClearCherryPick,
+  onActivateRepository,
+  onCloseRepository,
 }) {
   const data = session?.snapshot ?? null;
   const activeView = session?.activeView ?? "overview";
@@ -211,6 +216,16 @@ export function AppShell({
               )}
             </div>
           </header>
+
+          {sessions.length > 0 && (
+            <RepositoryTabs
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              onActivate={onActivateRepository}
+              onClose={onCloseRepository}
+              onOpen={onOpen}
+            />
+          )}
 
           {data && <StateBanner state={data.state} repoPath={data.repository.rootPath} conflictCount={conflictCount} onRefresh={onRefresh} />}
 
