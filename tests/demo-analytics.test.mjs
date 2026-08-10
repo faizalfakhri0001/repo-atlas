@@ -27,3 +27,18 @@ test("demo API provides hotspot metrics and generated-file controls", async () =
   assert.ok(response.data.files.every((file) => Number.isFinite(file.commitCount) && Number.isFinite(file.churn)));
   assert.equal(response.data.filters.includeGenerated, false);
 });
+
+test("demo API provides bounded ownership tree data for both periods", async () => {
+  const api = createDemoApi();
+  const allTime = await api.ownership({ period: "all", limit: 10 });
+  const recent = await api.ownership({ period: "12m", limit: 10 });
+
+  assert.equal(allTime.ok, true);
+  assert.equal(recent.ok, true);
+  assert.equal(allTime.data.period, "all");
+  assert.equal(recent.data.period, "12m");
+  assert.ok(allTime.data.nodes.length > 0);
+  assert.ok(allTime.data.summary.primaryContributor);
+  assert.ok(allTime.data.nodes.every((node) => Array.isArray(node.topContributors)));
+  assert.ok(recent.data.scope.returnedNodes <= 10);
+});
