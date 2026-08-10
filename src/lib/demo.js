@@ -922,6 +922,7 @@ export function createDemoApi() {
         metric: concentrated.length,
         penalty: Math.min(concentrated.length * 2, 10),
         action: { type: "navigate", payload: { view: "hotspots", filter: "concentrated" } },
+        relatedActions: [{ type: "navigate", payload: { view: "ownership" } }],
         details: concentrated.map((file) => file.path),
       });
     }
@@ -958,6 +959,9 @@ export function createDemoApi() {
         trackedFileCount: demoFiles.filter((file) => file.tracked).length,
         largeFileCount: 0,
         concentratedHotspotCount: concentrated.length,
+        highActivityFileCount: hotspots.files.filter((file) => file.hotspotBand === "High").length,
+        hotspotFileCount: hotspots.scope.eligibleFiles,
+        ownershipConcentrationThreshold: 0.8,
         lastCommitAt: commits[0]?.date ?? null,
         dirtyFileCount: status.files.length,
         conflictedFileCount: 0,
@@ -970,6 +974,7 @@ export function createDemoApi() {
         analytics: { maxCommits: hotspots.scope.maxCommits, processedCommits: hotspots.scope.processedCommits, truncated: Boolean(hotspots.scope.sourceTruncated) },
         branches: { totalLocal: branches.scope.totalLocal, analyzedLocal: branches.scope.analyzedLocal, truncated: Boolean(branches.scope.truncated) },
         trackedFiles: { totalEntries: demoFiles.filter((file) => file.tracked).length, inspectedEntries: demoFiles.filter((file) => file.tracked).length, truncated: false },
+        hotspots: { eligibleFiles: hotspots.scope.eligibleFiles, returnedFiles: hotspots.scope.returnedFiles, truncated: Boolean(hotspots.scope.truncated) },
         sourceTruncated: Boolean(hotspots.scope.sourceTruncated || branches.scope.truncated),
         truncated: Boolean(hotspots.scope.truncated || branches.scope.truncated),
         returnedSignals: orderedSignals.length,

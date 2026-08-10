@@ -44,7 +44,7 @@ function parseTrackedFileRows(raw, { limit = HEALTH_THRESHOLDS.maxTrackedFiles }
   };
 }
 
-function signal({ id, severity = "info", category, title, description, metric, penalty = 0, action, details = [] }) {
+function signal({ id, severity = "info", category, title, description, metric, penalty = 0, action, relatedActions = [], details = [] }) {
   return {
     id,
     severity,
@@ -54,6 +54,7 @@ function signal({ id, severity = "info", category, title, description, metric, p
     ...(metric === undefined ? {} : { metric }),
     penalty: Math.max(0, Math.floor(finiteNumber(penalty))),
     ...(action ? { action } : {}),
+    ...(relatedActions.length > 0 ? { relatedActions } : {}),
     ...(details.length > 0 ? { details: details.slice(0, HEALTH_THRESHOLDS.maxSignalDetails) } : {}),
   };
 }
@@ -249,6 +250,7 @@ function ownershipSignals(hotspots = {}) {
         metric: concentrated.length,
         penalty: Math.min(concentrated.length * HEALTH_THRESHOLDS.concentratedHotspotPenaltyPerFile, HEALTH_THRESHOLDS.concentratedHotspotPenaltyMaximum),
         action: { type: "navigate", payload: { view: "hotspots", filter: "concentrated" } },
+        relatedActions: [{ type: "navigate", payload: { view: "ownership" } }],
         details: concentrated.map((file) => `${file.path} (${Math.round(Number(file.ownershipConcentration) * 100)}%)`),
       }),
     ],
@@ -261,6 +263,7 @@ function buildHealthSignals(input = {}, { now = Date.now() } = {}) {
   const repository = repositorySignals(input.trackedFiles);
   const activity = activitySignals(input.analytics, now);
   const ownership = ownershipSignals(input.hotspots);
+  const hotspotFiles = Array.isArray(input.hotspots?.files) ? input.hotspots.files : [];
   const signals = [
     ...conflictSignals(input.status),
     ...branches.signals,
@@ -280,6 +283,9 @@ function buildHealthSignals(input = {}, { now = Date.now() } = {}) {
       trackedFileCount: input.trackedFiles?.totalEntries ?? input.trackedFiles?.files?.length ?? 0,
       largeFileCount: repository.largeFiles.length,
       concentratedHotspotCount: ownership.concentrated.length,
+      highActivityFileCount: hotspotFiles.filter((file) => file.hotspotBand === "High" || Number(file.hotspotScore) >= 0.75).length,
+      hotspotFileCount: input.hotspots?.scope?.eligibleFiles ?? hotspotFiles.length,
+      ownershipConcentrationThreshold: HEALTH_THRESHOLDS.ownershipConcentration,
       lastCommitAt: activity.lastCommitAt,
     },
   };
@@ -333,7 +339,7 @@ function buildHealthReport(input = {}, { now = Date.now(), limit = HEALTH_THRESH
   const analyticsScope = input.analytics?.scope ?? {};
   const branchScope = input.branches?.scope ?? {};
   const trackedScope = input.trackedFiles ?? {};
-  const sourceTruncated = Boolean(analyticsScope.truncated || branchScope.truncated || trackedScope.truncated);
+  const sourceTruncated = Boolean(analyticsScope.truncated || branchScope.truncated || trackedScope.truncated || input.hotspots?.scope?.truncated);
   return {
     score,
     grade: healthGrade(score, allSignals),
@@ -364,6 +370,11 @@ function buildHealthReport(input = {}, { now = Date.now(), limit = HEALTH_THRESH
         totalEntries: trackedScope.totalEntries ?? trackedScope.files?.length ?? 0,
         inspectedEntries: trackedScope.files?.length ?? 0,
         truncated: Boolean(trackedScope.truncated),
+      },
+      hotspots: {
+        eligibleFiles: input.hotspots?.scope?.eligibleFiles ?? hotspotFiles.length,
+        returnedFiles: input.hotspots?.scope?.returnedFiles ?? hotspotFiles.length,
+        truncated: Boolean(input.hotspots?.scope?.truncated),
       },
       sourceTruncated,
       truncated: Boolean(sourceTruncated || allSignals.length > signals.length),

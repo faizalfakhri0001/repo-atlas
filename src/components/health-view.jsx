@@ -18,6 +18,10 @@ function gradeLabel(value) {
 
 function SignalCard({ signal, onAction }) {
   const view = signal.action?.payload?.view;
+  const runAction = (action) => {
+    const navigation = resolveHealthNavigation(action);
+    if (navigation) onAction?.(navigation);
+  };
   return (
     <Card className="bg-card/70">
       <CardContent className="p-4">
@@ -31,8 +35,9 @@ function SignalCard({ signal, onAction }) {
             <h3 className="mt-2 text-sm font-medium">{signal.title}</h3>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{signal.description}</p>
           </div>
-          {view && <Button variant="outline" size="sm" onClick={() => onAction?.(resolveHealthNavigation(signal.action))}>{ACTION_LABELS[view] ?? "Open view"}<ChevronRight /></Button>}
+          {view && <Button variant="outline" size="sm" onClick={() => runAction(signal.action)}>{ACTION_LABELS[view] ?? "Open view"}<ChevronRight /></Button>}
         </div>
+        {signal.relatedActions?.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{signal.relatedActions.map((action) => { const relatedView = action?.payload?.view; return <Button key={relatedView} variant="ghost" size="sm" onClick={() => runAction(action)}>{ACTION_LABELS[relatedView] ?? "Open related view"}<ChevronRight /></Button>; })}</div>}
         <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
           {signal.metric !== undefined && <span>Metric: <strong className="font-medium text-foreground">{Number(signal.metric).toLocaleString()}</strong></span>}
           <span>Penalty: <strong className="font-medium text-foreground">{signal.penalty > 0 ? signal.penalty : "none"}</strong></span>
@@ -134,8 +139,8 @@ export function HealthView({ repoPath, revision, onNavigate }) {
       </Card>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <Card><CardHeader><CardTitle>Repository facts</CardTitle><CardDescription>Raw context used by the current rules.</CardDescription></CardHeader><CardContent className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3"><Fact label="Commits analyzed" value={facts.processedCommits} /><Fact label="Total commits" value={facts.totalCommits} /><Fact label="Local branches" value={facts.localBranchCount} /><Fact label="Stale branches" value={facts.staleBranchCount} /><Fact label="Behind branches" value={facts.behindBranchCount} /><Fact label="Gone upstream" value={facts.goneBranchCount} /><Fact label="Tracked files" value={facts.trackedFileCount} /><Fact label="Large files" value={facts.largeFileCount} /><Fact label="Conflicts" value={facts.conflictedFileCount} /></CardContent></Card>
-        <Card><CardHeader><CardTitle>Activity context</CardTitle><CardDescription>Dates and scope help explain what the score covers.</CardDescription></CardHeader><CardContent className="space-y-3 text-xs"><div className="flex justify-between gap-3"><span className="text-muted-foreground">Last commit</span><span title={formatDate(facts.lastCommitAt)}>{facts.lastCommitAt ? formatRelativeDate(facts.lastCommitAt) : "No commit history"}</span></div><div className="flex justify-between gap-3"><span className="text-muted-foreground">Current branch</span><span>{facts.currentBranch || "Detached HEAD"}</span></div><div className="flex justify-between gap-3"><span className="text-muted-foreground">Default branch</span><span>{facts.defaultBranch || "Not resolved"}</span></div><div className="flex justify-between gap-3"><span className="text-muted-foreground">Working changes</span><span>{Number(facts.dirtyFileCount ?? 0).toLocaleString()}</span></div>{scope.sourceTruncated && <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-amber-400">This report is bounded. Commits, branches, or tracked-file metadata were truncated; metrics are not a claim about the entire repository.</div>}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Repository facts</CardTitle><CardDescription>Raw context used by the current rules.</CardDescription></CardHeader><CardContent className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3"><Fact label="Commits analyzed" value={facts.processedCommits} /><Fact label="Total commits" value={facts.totalCommits} /><Fact label="Local branches" value={facts.localBranchCount} /><Fact label="Stale branches" value={facts.staleBranchCount} /><Fact label="Behind branches" value={facts.behindBranchCount} /><Fact label="Gone upstream" value={facts.goneBranchCount} /><Fact label="Tracked files" value={facts.trackedFileCount} /><Fact label="Large files" value={facts.largeFileCount} /><Fact label="High-activity files" value={facts.highActivityFileCount} /><Fact label="Concentrated hotspots" value={facts.concentratedHotspotCount} /><Fact label="Conflicts" value={facts.conflictedFileCount} /></CardContent></Card>
+        <Card><CardHeader><CardTitle>Activity context</CardTitle><CardDescription>Dates and scope help explain what the score covers.</CardDescription></CardHeader><CardContent className="space-y-3 text-xs"><div className="flex justify-between gap-3"><span className="text-muted-foreground">Last commit</span><span title={formatDate(facts.lastCommitAt)}>{facts.lastCommitAt ? formatRelativeDate(facts.lastCommitAt) : "No commit history"}</span></div><div className="flex justify-between gap-3"><span className="text-muted-foreground">Current branch</span><span>{facts.currentBranch || "Detached HEAD"}</span></div><div className="flex justify-between gap-3"><span className="text-muted-foreground">Default branch</span><span>{facts.defaultBranch || "Not resolved"}</span></div><div className="flex justify-between gap-3"><span className="text-muted-foreground">Working changes</span><span>{Number(facts.dirtyFileCount ?? 0).toLocaleString()}</span></div><div className="flex justify-between gap-3"><span className="text-muted-foreground">Ownership threshold</span><span>{Math.round(Number(facts.ownershipConcentrationThreshold ?? 0) * 100)}% on high-activity files</span></div>{scope.sourceTruncated && <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-amber-400">This report is bounded. Commits, branches, tracked-file, or hotspot metadata were truncated; metrics are not a claim about the entire repository.</div>}</CardContent></Card>
       </div>
     </div>
   );
