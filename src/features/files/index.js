@@ -1,2 +1,2 @@
 // Public entry point for repository file features.
-export {};
+export { FileExplorer } from "@/components/file-explorer";

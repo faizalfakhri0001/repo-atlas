@@ -6,6 +6,7 @@ import {
   CircleAlert,
   CircleDot,
   ExternalLink,
+  Files,
   FlaskConical,
   FolderGit2,
   FolderOpen,
@@ -35,6 +36,7 @@ import { BranchesView } from "@/features/branches";
 import { CompareView } from "@/features/compare";
 import { WorktreesView, SubmodulesView, RefsView } from "@/features/metadata";
 import { WorkspaceView } from "@/features/workspace";
+import { FileExplorer } from "@/features/files";
 import { CherryPickDialog } from "@/components/cherry-pick-dialog";
 import { StateBanner } from "@/features/repository";
 import { cn, formatRelativeDate, truncateMiddle } from "@/lib/utils";
@@ -42,6 +44,7 @@ import { cn, formatRelativeDate, truncateMiddle } from "@/lib/utils";
 const NAV_ITEMS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "commits", label: "Commits", icon: GitCommitHorizontal },
+  { id: "files", label: "Files", icon: Files },
   { id: "branches", label: "Branches", icon: GitBranch },
   { id: "compare", label: "Compare / PR", icon: GitCompareArrows },
   { id: "worktrees", label: "Worktrees", icon: Workflow },
@@ -347,6 +350,7 @@ function ViewHost({
       {view === "worktrees" && <WorktreesView worktrees={data.worktrees} />}
       {view === "submodules" && <SubmodulesView submodules={data.submodules} />}
       {view === "workspace" && <WorkspaceView status={data.status} repoPath={data.repository.rootPath} />}
+      {view === "files" && <FileExplorer repoPath={data.repository.rootPath} />}
       {view === "refs" && <RefsView data={data} />}
     </>
   );
