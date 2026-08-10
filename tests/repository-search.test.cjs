@@ -54,3 +54,19 @@ test("repository search finds files, refs, commits, authors, and hashes", async 
   const hashResults = await searchRepository(root, { query: `type:commit ${firstHash.slice(0, 7)}` });
   assert.ok(hashResults.results.some((result) => result.hash === firstHash));
 });
+
+test("commit search scans history beyond the visible commit page", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-search-history-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const git = (...args) => execFileAsync("git", args, { cwd: root, encoding: "utf8" });
+
+  await git("init", "-b", "main");
+  await git("config", "user.name", "History Author");
+  await git("config", "user.email", "history@example.test");
+  for (let index = 0; index < 105; index += 1) {
+    await git("commit", "--allow-empty", "-m", `Historical marker ${index}`);
+  }
+
+  const result = await searchRepository(root, { query: "type:commit Historical marker 0" });
+  assert.ok(result.results.some((commit) => commit.subject === "Historical marker 0"));
+});
