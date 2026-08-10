@@ -3169,14 +3169,15 @@ Existing behavior tetap bekerja tanpa regression.
 
 ## Stage 3 — File History
 
-- [ ] `file:history`.
-- [ ] parser dengan rename support.
-- [ ] history view.
-- [ ] diff integration.
-- [ ] pagination.
-- [ ] optional content-at-revision.
-- [ ] history state persistence.
-- [ ] rename integration test.
+- [x] `file:history`.
+- [x] parser dengan rename support.
+- [x] history view.
+- [x] diff integration.
+- [x] pagination.
+- [x] optional content-at-revision.
+- [x] history state persistence.
+- [x] rename integration test.
+- [ ] File History E2E. (Dilewati sesuai instruksi pengguna.)
 
 ---
 
@@ -3654,12 +3655,12 @@ select commit
 
 ## File History
 
-- [ ] History IPC
-- [ ] `--follow`
-- [ ] Rename support
-- [ ] Pagination
-- [ ] Diff integration
-- [ ] Revision content
+- [x] History IPC
+- [x] `--follow`
+- [x] Rename support
+- [x] Pagination
+- [x] Diff integration
+- [x] Revision content
 
 ## Diff
 
