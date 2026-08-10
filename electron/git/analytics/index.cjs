@@ -1,8 +1,10 @@
 const crypto = require("node:crypto");
+const path = require("node:path");
 const { resolveRepository, runGit } = require("../core.cjs");
 const { runGitStream } = require("./runner.cjs");
 const { createAnalyticsParser } = require("./parser.cjs");
 const { addAuthorAlias, normalizeAuthorIdentity } = require("./identity.cjs");
+const { AnalyticsCache, buildAnalyticsCacheKey } = require("./cache.cjs");
 const {
   MAX_ANALYTICS_OUTPUT_BYTES,
   analyticsReadLimit,
@@ -12,6 +14,8 @@ const {
 } = require("./limits.cjs");
 
 const ANALYTICS_FORMAT = "%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s";
+const analyticsCache = new AnalyticsCache();
+const activeBuilds = new Map();
 
 function chooseEarlier(current, candidate) {
   if (!candidate) return current;
@@ -218,10 +222,64 @@ async function buildAnalyticsIndex(repositoryPath, options = {}) {
   }, scoped.commits);
 }
 
+async function getAnalyticsIndex(repositoryPath, options = {}) {
+  const repository = await resolveRepository(repositoryPath);
+  const scope = normalizeAnalyticsScope(options);
+  const [head, refsFingerprint] = await Promise.all([
+    readRepositoryRevision(repository.rootPath),
+    readRefsFingerprint(repository.rootPath),
+  ]);
+  const key = buildAnalyticsCacheKey({
+    rootPath: repository.rootPath,
+    head,
+    refsFingerprint,
+    maxCommits: scope.maxCommits,
+    maxFilesPerCommit: scope.maxFilesPerCommit,
+  });
+  const cached = analyticsCache.get(key);
+  if (cached) return cached;
+
+  const active = activeBuilds.get(repository.rootPath);
+  if (active) {
+    await active.promise.catch(() => {});
+    return getAnalyticsIndex(repositoryPath, options);
+  }
+
+  const promise = buildAnalyticsIndex(repositoryPath, options)
+    .then((index) => {
+      const indexKey = buildAnalyticsCacheKey({
+        rootPath: index.repositoryKey,
+        head: index.head,
+        refsFingerprint: index.refsFingerprint,
+        maxCommits: index.scope.maxCommits,
+        maxFilesPerCommit: index.scope.maxFilesPerCommit,
+      });
+      analyticsCache.set(indexKey, index, { rootPath: index.repositoryKey });
+      return index;
+    })
+    .finally(() => {
+      if (activeBuilds.get(repository.rootPath)?.promise === promise) activeBuilds.delete(repository.rootPath);
+    });
+  activeBuilds.set(repository.rootPath, { key, promise });
+  return promise;
+}
+
+function invalidateAnalyticsCache(repositoryPath) {
+  const rootPath = path.resolve(repositoryPath);
+  return analyticsCache.invalidateRepository(rootPath);
+}
+
+function getAnalyticsCache() {
+  return analyticsCache;
+}
+
 module.exports = {
   ANALYTICS_FORMAT,
   buildAnalyticsIndex,
   createAnalyticsIndex,
+  getAnalyticsCache,
+  getAnalyticsIndex,
+  invalidateAnalyticsCache,
   readRefsFingerprint,
   readRepositoryRevision,
 };
