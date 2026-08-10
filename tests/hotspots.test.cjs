@@ -4,8 +4,11 @@ const {
   calculateAgeDays,
   calculateChurn,
   calculateCommitFrequency,
+  calculateHotspotScore,
   calculateRecencyScore,
   collectFileActivity,
+  percentileRank,
+  scoreHotspotActivity,
 } = require("../electron/git/analytics/hotspots.cjs");
 
 test("calculateChurn is the sum of line additions and deletions", () => {
@@ -28,6 +31,41 @@ test("calculateRecencyScore follows the deterministic exponential decay", () => 
   assert.ok(Math.abs(calculateRecencyScore("2026-02-11T00:00:00.000Z", now) - Math.exp(-1)) < 1e-12);
   assert.equal(calculateRecencyScore(null, now), 0);
   assert.equal(calculateRecencyScore("2026-09-01T00:00:00.000Z", now), 1);
+});
+
+test("percentileRank is bounded and monotonic", () => {
+  assert.equal(percentileRank([], 1), 0);
+  assert.equal(percentileRank([4], 4), 1);
+  assert.equal(percentileRank([1, 2, 3], 1), 0);
+  assert.equal(percentileRank([1, 2, 3], 2), 0.5);
+  assert.equal(percentileRank([1, 2, 3], 3), 1);
+  assert.equal(percentileRank([1, 1, 1], 1), 0);
+});
+
+test("scoreHotspotActivity keeps raw metrics and exposes explainable weighted scores", () => {
+  const now = "2026-08-10T00:00:00.000Z";
+  const scored = scoreHotspotActivity(
+    [
+      { path: "old.js", commitCount: 1, churn: 1, lastChangedAt: "2025-01-01T00:00:00.000Z" },
+      { path: "busy.js", commitCount: 4, churn: 40, lastChangedAt: now },
+      { path: "changed.js", commitCount: 2, churn: 8, lastChangedAt: "2026-05-10T00:00:00.000Z" },
+    ],
+    { now },
+  );
+  const busy = scored.find((file) => file.path === "busy.js");
+  assert.equal(busy.commitCount, 4);
+  assert.equal(busy.churn, 40);
+  assert.equal(busy.commitFrequencyPercentile, 1);
+  assert.equal(busy.churnPercentile, 1);
+  assert.equal(busy.recencyScore, 1);
+  assert.equal(busy.hotspotScore, 1);
+  assert.equal(busy.hotspotPercentile, 1);
+  assert.equal(busy.hotspotBand, "High");
+  assert.equal(calculateHotspotScore({ commitFrequencyPercentile: 0, churnPercentile: 0, recencyScore: 1 }), 0.2);
+  for (const file of scored) {
+    assert.ok(file.hotspotScore >= 0 && file.hotspotScore <= 1);
+    assert.ok(file.hotspotPercentile >= 0 && file.hotspotPercentile <= 1);
+  }
 });
 
 test("collectFileActivity normalizes file metrics from the shared analytics index", () => {

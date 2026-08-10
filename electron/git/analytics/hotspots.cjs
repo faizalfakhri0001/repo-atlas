@@ -4,6 +4,11 @@ const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 const RECENCY_WINDOW_DAYS = 180;
 const DEFAULT_HOTSPOT_LIMIT = 100;
 const MAX_HOTSPOT_LIMIT = 1000;
+const HOTSPOT_WEIGHTS = Object.freeze({
+  commitFrequency: 0.45,
+  churn: 0.35,
+  recency: 0.2,
+});
 
 function finiteNumber(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -35,6 +40,63 @@ function calculateRecencyScore(lastChangedAt, now = Date.now()) {
   const ageDays = calculateAgeDays(lastChangedAt, now);
   if (ageDays == null) return 0;
   return Math.exp(-ageDays / RECENCY_WINDOW_DAYS);
+}
+
+function clampUnit(value) {
+  return Math.min(1, Math.max(0, finiteNumber(value)));
+}
+
+function percentileRank(values, value) {
+  const numericValues = values.filter((candidate) => Number.isFinite(Number(candidate))).map(Number);
+  const numericValue = Number(value);
+  if (numericValues.length === 0 || !Number.isFinite(numericValue)) return 0;
+  if (numericValues.length === 1) return 1;
+  const lowerValues = numericValues.filter((candidate) => candidate < numericValue).length;
+  return clampUnit(lowerValues / (numericValues.length - 1));
+}
+
+function calculateHotspotScore({ commitFrequencyPercentile, churnPercentile, recencyScore }) {
+  return clampUnit(
+    HOTSPOT_WEIGHTS.commitFrequency * clampUnit(commitFrequencyPercentile) +
+      HOTSPOT_WEIGHTS.churn * clampUnit(churnPercentile) +
+      HOTSPOT_WEIGHTS.recency * clampUnit(recencyScore),
+  );
+}
+
+function hotspotBand(score) {
+  const normalized = clampUnit(score);
+  if (normalized >= 0.75) return "High";
+  if (normalized >= 0.4) return "Medium";
+  return "Low";
+}
+
+function scoreHotspotActivity(files, { now = Date.now() } = {}) {
+  const activities = Array.isArray(files) ? files : [];
+  const commitCounts = activities.map((file) => file.commitCount);
+  const churnValues = activities.map((file) => file.churn);
+  const scored = activities.map((file) => {
+    const ageDays = calculateAgeDays(file.lastChangedAt, now);
+    const recencyScore = calculateRecencyScore(file.lastChangedAt, now);
+    const commitFrequencyPercentile = percentileRank(commitCounts, file.commitCount);
+    const churnPercentile = percentileRank(churnValues, file.churn);
+    const hotspotScore = calculateHotspotScore({ commitFrequencyPercentile, churnPercentile, recencyScore });
+    return {
+      ...file,
+      ageDays,
+      recencyScore,
+      commitFrequencyPercentile,
+      commitFrequencyScore: commitFrequencyPercentile,
+      churnPercentile,
+      churnScore: churnPercentile,
+      hotspotScore,
+      hotspotBand: hotspotBand(hotspotScore),
+    };
+  });
+  const hotspotScores = scored.map((file) => file.hotspotScore);
+  return scored.map((file) => ({
+    ...file,
+    hotspotPercentile: percentileRank(hotspotScores, file.hotspotScore),
+  }));
 }
 
 function mapValues(value) {
@@ -91,6 +153,7 @@ function normalizeHotspotLimit(value) {
 module.exports = {
   DAY_IN_MILLISECONDS,
   DEFAULT_HOTSPOT_LIMIT,
+  HOTSPOT_WEIGHTS,
   MAX_HOTSPOT_LIMIT,
   RECENCY_WINDOW_DAYS,
   collectFileActivity,
@@ -98,7 +161,11 @@ module.exports = {
   calculateCommitFrequency,
   calculateAgeDays,
   calculateRecencyScore,
+  calculateHotspotScore,
+  hotspotBand,
   normalizeHotspotLimit,
   normalizePathPrefix,
   pathMatchesPrefix,
+  percentileRank,
+  scoreHotspotActivity,
 };
