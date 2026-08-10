@@ -87,3 +87,21 @@ test("session lifecycle canonicalizes repository roots and prevents duplicate ta
   assert.equal(state.sessions.length, 1);
   assert.equal(state.activeSessionId, "/workspace/repository");
 });
+
+test("repository success updates recent metadata without storing a snapshot in the recent entry", () => {
+  let state = createInitialWorkspaceState();
+  state = workspaceReducer(state, { type: "SESSION_OPEN_REQUEST", repositoryPath: "/workspace/repository", lastActivatedAt: 10 });
+  state = workspaceReducer(state, {
+    type: "SESSION_OPEN_SUCCESS",
+    repositoryPath: "/workspace/repository",
+    lastActivatedAt: 20,
+    data: {
+      repository: { rootPath: "/workspace/repository", name: "repository", currentBranch: "main", dirty: false },
+      commits: [{ hash: "not-persisted" }],
+    },
+  });
+
+  assert.deepEqual(state.recentRepositories, [
+    { path: "/workspace/repository", name: "repository", lastKnownBranch: "main", lastOpenedAt: 20, pinned: false },
+  ]);
+});

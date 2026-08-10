@@ -1,9 +1,15 @@
-import { useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer } from "react";
 import {
   createInitialWorkspaceState,
   findRepositorySession,
   workspaceReducer,
 } from "./workspace-reducer";
+import {
+  loadRecentRepositories,
+  loadWorkspaceMetadata,
+  saveRecentRepositories,
+  saveWorkspaceMetadata,
+} from "./workspace-persistence";
 
 export {
   DEFAULT_VIEW,
@@ -15,13 +21,28 @@ export {
   MAX_OPEN_SESSIONS,
   workspaceReducer,
 } from "./workspace-reducer";
+export * from "./workspace-persistence";
 
-export function useWorkspaceStore() {
-  const [state, dispatch] = useReducer(workspaceReducer, undefined, createInitialWorkspaceState);
+function initializeWorkspaceState(storage) {
+  const workspace = loadWorkspaceMetadata(storage);
+  const recentRepositories = loadRecentRepositories(storage);
+  return createInitialWorkspaceState({ ...workspace, recentRepositories });
+}
+
+export function useWorkspaceStore({ storage = null } = {}) {
+  const [state, dispatch] = useReducer(workspaceReducer, storage, initializeWorkspaceState);
   const activeSession = useMemo(
     () => (state.activeSessionId ? state.sessions.find((session) => session.id === state.activeSessionId) ?? null : null),
     [state],
   );
+
+  useEffect(() => {
+    saveWorkspaceMetadata(storage, state);
+  }, [storage, state.activeSessionId, state.sessions]);
+
+  useEffect(() => {
+    saveRecentRepositories(storage, state.recentRepositories);
+  }, [storage, state.recentRepositories]);
 
   const actions = useMemo(
     () => ({
@@ -34,6 +55,10 @@ export function useWorkspaceStore() {
       refreshFailed: (repositoryPath, error) => dispatch({ type: "SESSION_REFRESH_ERROR", repositoryPath, error }),
       activateSession: (sessionId) => dispatch({ type: "session/activate", sessionId }),
       closeRepository: (sessionId) => dispatch({ type: "SESSION_CLOSE", sessionId }),
+      pinRecent: (repositoryPath, pinned) => dispatch({ type: "RECENT_PIN", repositoryPath, pinned }),
+      removeRecent: (repositoryPath) => dispatch({ type: "RECENT_REMOVE", repositoryPath }),
+      upsertRecent: (repository, lastOpenedAt) => dispatch({ type: "RECENT_UPSERT", repository, lastOpenedAt }),
+      restoreWorkspace: (metadata) => dispatch({ type: "WORKSPACE_RESTORE", ...metadata }),
       setActiveView: (view) => dispatch({ type: "session/set-view", view }),
       setGraphRequest: (request) => dispatch({ type: "session/set-graph-request", request }),
       setCompareInit: (initial) => dispatch({ type: "session/set-compare-init", initial }),

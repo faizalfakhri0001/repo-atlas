@@ -1,5 +1,10 @@
 export const DEFAULT_VIEW = "overview";
 export const MAX_OPEN_SESSIONS = 10;
+import {
+  removeRecentRepository,
+  setRecentPinned,
+  upsertRecentRepository,
+} from "./workspace-persistence.js";
 
 function normalizeRepositoryPath(repositoryPath) {
   if (typeof repositoryPath !== "string") return null;
@@ -140,7 +145,20 @@ function applyLoadSuccess(state, action) {
     canonicalId,
     nextSession,
   );
-  return { ...ensured.state, activeSessionId: canonicalId, sessions };
+  return {
+    ...ensured.state,
+    activeSessionId: canonicalId,
+    sessions,
+    recentRepositories: upsertRecentRepository(
+      ensured.state.recentRepositories,
+      {
+        path: canonicalPath,
+        name: repository.name,
+        lastKnownBranch: repository.currentBranch,
+      },
+      timestamp,
+    ),
+  };
 }
 
 function applyLoadError(state, action) {
@@ -214,6 +232,27 @@ export function workspaceReducer(state, action) {
 
     case "SESSION_MARK_STALE":
       return updateSession(state, action.sessionId, (session) => ({ ...session, status: "stale" }));
+
+    case "RECENT_UPSERT":
+      return {
+        ...state,
+        recentRepositories: upsertRecentRepository(state.recentRepositories, action.repository, action.lastOpenedAt),
+      };
+
+    case "RECENT_PIN":
+      return {
+        ...state,
+        recentRepositories: setRecentPinned(state.recentRepositories, action.repositoryPath, action.pinned),
+      };
+
+    case "RECENT_REMOVE":
+      return {
+        ...state,
+        recentRepositories: removeRecentRepository(state.recentRepositories, action.repositoryPath),
+      };
+
+    case "WORKSPACE_RESTORE":
+      return createInitialWorkspaceState(action);
 
     case "session/set-view": {
       const sessionId = action.sessionId ?? state.activeSessionId;
