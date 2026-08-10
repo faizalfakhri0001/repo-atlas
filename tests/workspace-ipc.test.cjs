@@ -11,8 +11,8 @@ test("workspace operation IPC exposes policy and fixed file-operation channels",
 
   assert.match(main, /"settings:get-operation-mode": async \(\) =>/);
   assert.match(main, /"settings:set-operation-mode": async \(payload\) =>/);
-  assert.match(main, /stageFiles\(payload\?\.repositoryPath, payload\?\.paths, \{ operationMode \}\)/);
-  assert.match(main, /unstageFiles\(payload\?\.repositoryPath, payload\?\.paths, \{ operationMode \}\)/);
+  assert.match(main, /"workspace:stage-files": \(payload\) => executeWorkspaceOperation\(payload, stageFiles\)/);
+  assert.match(main, /"workspace:unstage-files": \(payload\) => executeWorkspaceOperation\(payload, unstageFiles\)/);
   assert.match(preload, /getOperationMode: \(\) => ipcRenderer\.invoke\("settings:get-operation-mode"\)/);
   assert.match(preload, /stageFiles: \(payload\) => ipcRenderer\.invoke\("workspace:stage-files", payload\)/);
   assert.match(preload, /unstageFiles: \(payload\) => ipcRenderer\.invoke\("workspace:unstage-files", payload\)/);

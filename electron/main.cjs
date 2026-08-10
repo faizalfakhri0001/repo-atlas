@@ -48,6 +48,18 @@ const watchManager = new WatchManager({
   },
 });
 
+async function executeWorkspaceOperation(payload, operation) {
+  const sessionId = payload?.sessionId;
+  const transactionId = watchManager.beginTransaction(sessionId);
+  try {
+    const operationMode = await preferences.getOperationMode();
+    const data = await operation(payload?.repositoryPath, payload?.paths, { operationMode });
+    return { ...data, transactionId };
+  } finally {
+    watchManager.endTransaction(sessionId, transactionId);
+  }
+}
+
 function serializeError(error) {
   if (error instanceof GitServiceError) {
     return {
@@ -137,14 +149,8 @@ function registerIpcHandlers() {
     "branches:intelligence": (payload) => branchIntelligence(payload?.repositoryPath, payload ?? {}),
     "settings:get-operation-mode": async () => ({ operationMode: await preferences.getOperationMode() }),
     "settings:set-operation-mode": async (payload) => ({ operationMode: await preferences.setOperationMode(payload?.mode) }),
-    "workspace:stage-files": async (payload) => {
-      const operationMode = await preferences.getOperationMode();
-      return stageFiles(payload?.repositoryPath, payload?.paths, { operationMode });
-    },
-    "workspace:unstage-files": async (payload) => {
-      const operationMode = await preferences.getOperationMode();
-      return unstageFiles(payload?.repositoryPath, payload?.paths, { operationMode });
-    },
+    "workspace:stage-files": (payload) => executeWorkspaceOperation(payload, stageFiles),
+    "workspace:unstage-files": (payload) => executeWorkspaceOperation(payload, unstageFiles),
     "repository:refresh-partial": (payload) => refreshRepositoryPartial(payload?.repositoryPath, payload?.parts),
     "repository:watch-start": (payload) => watchManager.start({ sessionId: payload?.sessionId, repositoryPath: payload?.repositoryPath, mode: payload?.mode }),
     "repository:watch-stop": (payload) => watchManager.stop(payload?.sessionId),
