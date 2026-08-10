@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DiffView } from "@/features/diff/diff-view";
 import { SplitDiff } from "@/features/diff/split-diff";
 import { UnifiedDiff } from "@/features/diff/unified-diff";
+import { DIFF_PREFERENCES_KEY } from "@/features/diff/diff-preferences";
 
 const { fileDiff } = vi.hoisted(() => ({ fileDiff: vi.fn() }));
 
@@ -88,5 +89,56 @@ describe("diff renderers", () => {
     expect(screen.getByRole("table", { name: "Split diff" })).toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem("repo-atlas-diff-preferences-v1"))).toEqual({ mode: "split", wrap: true, syntaxHighlight: false });
     expect(fileDiff).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository", type: "commit", path: "app.js", from: "a".repeat(40), to: "b".repeat(40) });
+
+    cleanup();
+    render(<DiffView repoPath="/workspace/repository" request={{ type: "commit", path: "app.js", from: "a".repeat(40), to: "b".repeat(40) }} />);
+    expect(await screen.findByRole("table", { name: "Split diff" })).toBeInTheDocument();
+  });
+
+  it("preserves binary responses without attempting to render text", async () => {
+    fileDiff.mockResolvedValue({ ok: true, data: { binary: true, diff: "", truncated: false } });
+
+    render(<DiffView repoPath="/workspace/repository" request={{ type: "workspace", path: "assets/icon.png" }} />);
+
+    expect(await screen.findByText("Binary file — no text diff available.")).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Split diff" })).not.toBeInTheDocument();
+  });
+
+  it("collapses large output and reveals all lines on request", async () => {
+    const diff = [
+      "diff --git a/large.js b/large.js",
+      "@@ -0,0 +1,901 @@",
+      ...Array.from({ length: 901 }, (_, index) => `+line ${index + 1}`),
+    ].join("\n");
+    fileDiff.mockResolvedValue({ ok: true, data: { binary: false, diff, truncated: true } });
+    window.localStorage.setItem(DIFF_PREFERENCES_KEY, JSON.stringify({ mode: "unified", wrap: false, syntaxHighlight: false }));
+    const user = userEvent.setup();
+
+    render(<DiffView repoPath="/workspace/repository" request={{ type: "workspace", path: "large.js" }} />);
+
+    expect(await screen.findByText("Diff is very large — output was truncated by the scanner.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show all 901 lines" })).toBeInTheDocument();
+    expect(screen.queryByText("line 901")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show all 901 lines" }));
+    expect(screen.getByText("line 901")).toBeInTheDocument();
+  });
+
+  it("renders source text as text even when the line resembles markup", () => {
+    render(
+      <UnifiedDiff
+        language="markup"
+        hunks={[{
+          header: "@@ -1 +1 @@",
+          context: "",
+          oldStart: 1,
+          newStart: 1,
+          lines: [{ type: "add", oldLine: null, newLine: 1, text: '<img src=x onerror="alert(1)">' }],
+        }]}
+      />,
+    );
+
+    expect(screen.getByText('<img src=x onerror="alert(1)">')).toBeInTheDocument();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 });
