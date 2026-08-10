@@ -1,6 +1,9 @@
 // Synthetic repository served when the app runs in a plain browser (no Electron
 // bridge). Lets the UI be previewed and demoed without touching a real repo.
 
+import { isHashLike, parseSearchQuery } from "../features/search/query-parser.js";
+import { groupSearchResults, scoreFile, scoreText } from "../features/search/search-scoring.js";
+
 function mulberry32(seed) {
   let a = seed >>> 0;
   return function rand() {
@@ -420,6 +423,88 @@ export function createDemoApi() {
     countObjects: { count: 132, "in-pack": 2481, size: 512, "size-pack": 3921 },
   });
 
+  const searchDemoRepository = ({ query: rawQuery = "", types, limit = 100 } = {}) => {
+    const query = parseSearchQuery(rawQuery);
+    const value = query.text || query.path || query.branch || query.author || "";
+    if (!value) return { query: query.raw, errors: query.errors, durationMs: 0, results: [], revision: { head: mainTip, scannedAt: new Date().toISOString() } };
+    const selectedTypes = query.type && query.type !== "all"
+      ? [query.type]
+      : Array.isArray(types) && types.length > 0
+        ? types
+        : ["file", "commit", "branch", "tag", "author"];
+    const inDateRange = (date) => {
+      const day = String(date ?? "").slice(0, 10);
+      return (!query.after || day >= query.after) && (!query.before || day <= query.before);
+    };
+    const results = [];
+
+    if (selectedTypes.includes("file")) {
+      for (const file of demoFiles) {
+        if (query.path && !file.path.toLowerCase().includes(query.path.toLowerCase())) continue;
+        const score = scoreFile(file, value);
+        if (score > 0) results.push({ type: "file", ...file, score });
+      }
+    }
+    if (selectedTypes.includes("commit")) {
+      for (const commit of commits) {
+        if (!inDateRange(commit.date)) continue;
+        const score = Math.max(scoreText(commit.subject, value), scoreText(commit.hash, value), scoreText(commit.author, value));
+        if (score > 0) {
+          results.push({
+            type: "commit",
+            hash: commit.hash,
+            shortHash: commit.shortHash,
+            subject: commit.subject,
+            author: commit.author,
+            email: commit.email,
+            date: commit.date,
+            refs: commit.refs,
+            score,
+          });
+        }
+        if (isHashLike(query.text) && commit.hash.startsWith(query.text.toLowerCase())) {
+          results.push({
+            type: "commit",
+            hash: commit.hash,
+            shortHash: commit.shortHash,
+            subject: commit.subject,
+            author: commit.author,
+            email: commit.email,
+            date: commit.date,
+            refs: commit.refs,
+            score: 1300,
+          });
+        }
+      }
+    }
+    if (selectedTypes.includes("branch")) {
+      for (const branch of branchRows()) {
+        if (query.branch && !branch.name.toLowerCase().includes(query.branch.toLowerCase())) continue;
+        if (!inDateRange(branch.date)) continue;
+        const score = scoreText(branch.name, value);
+        if (score > 0) results.push({ type: "branch", name: branch.name, hash: branch.hash, current: branch.current, remote: branch.remote, date: branch.date, score });
+      }
+    }
+    if (selectedTypes.includes("tag")) {
+      for (const tag of tags) {
+        const commit = byHash.get(tag.hash);
+        if (!inDateRange(commit?.date)) continue;
+        const score = scoreText(tag.name, value);
+        if (score > 0) results.push({ type: "tag", name: tag.name, hash: tag.hash, date: commit?.date, score });
+      }
+    }
+    if (selectedTypes.includes("author")) {
+      for (const author of AUTHORS) {
+        const contributor = scanData().contributors.find((candidate) => candidate.email === author.email);
+        const score = Math.max(scoreText(author.name, value), scoreText(author.email, value));
+        if (score > 0) results.push({ type: "author", name: author.name, email: author.email, commits: contributor?.commits ?? 0, score });
+      }
+    }
+
+    const grouped = groupSearchResults(results, { limitPerType: 20, limit: Math.min(Math.max(Number(limit) || 100, 1), 100) });
+    return { query: query.raw, errors: query.errors, durationMs: 0, results: grouped.all, revision: { head: mainTip, scannedAt: new Date().toISOString() } };
+  };
+
   const ok = (data) => Promise.resolve({ ok: true, data });
   const demoWriteError = () =>
     Promise.resolve({
@@ -437,6 +522,7 @@ export function createDemoApi() {
     revealRepository: () => Promise.resolve({ ok: true }),
     revealRepositoryFile: () => Promise.resolve({ ok: true }),
     scanRepository: () => ok(scanData()),
+    repositorySearch: (payload) => ok(searchDemoRepository(payload)),
     listRepositoryFiles: () => ok(demoFiles),
     readRepositoryFile: ({ path: filePath } = {}) => {
       const file = demoFiles.find((entry) => entry.path === filePath);
