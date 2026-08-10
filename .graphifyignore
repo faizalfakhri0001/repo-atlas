@@ -1,0 +1,26 @@
+# Graphify scan exclusions.
+# Keep generated files, dependencies, local tooling, and editor metadata out of
+# the project knowledge graph. Patterns use .gitignore syntax.
+
+# Existing repository exclusions (kept here because Graphify 0.8.39 prefers
+# .graphifyignore over .gitignore when both are present).
+node_modules/
+dist/
+release/
+.DS_Store
+*.log
+.vscode/
+.idea/
+.code-review-graph/
+graphify-out/
+
+# Project and test tooling artifacts.
+/coverage/
+/.vite/
+/playwright-report/
+/test-results/
+/storybook-static/
+
+# Assistant/editor integration metadata.
+/.claude/
+/.codex/
