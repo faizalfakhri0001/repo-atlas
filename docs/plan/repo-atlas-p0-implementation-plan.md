@@ -3152,17 +3152,18 @@ Existing behavior tetap bekerja tanpa regression.
 
 ## Stage 2 — File Explorer
 
-- [ ] `repository:list-files`.
-- [ ] safe path helper.
-- [ ] `repository:file-content`.
-- [ ] tree builder.
-- [ ] virtualized file tree.
-- [ ] file filter.
-- [ ] working tree badges.
-- [ ] text preview.
-- [ ] binary state.
-- [ ] large file state.
-- [ ] Demo API.
+- [x] `repository:list-files`.
+- [x] safe path helper.
+- [x] `repository:file-content`.
+- [x] tree builder.
+- [x] virtualized file tree.
+- [x] file filter.
+- [x] working tree badges.
+- [x] text preview.
+- [x] binary state.
+- [x] large file state.
+- [x] Demo API.
+- [ ] File Explorer E2E. (Dilewati sesuai instruksi pengguna.)
 
 ---
 
@@ -3641,15 +3642,15 @@ select commit
 
 ## File Explorer
 
-- [ ] Git-aware file listing
-- [ ] `.gitignore` support
-- [ ] Tree
-- [ ] Virtualization
-- [ ] Filter
-- [ ] Working change badges
-- [ ] Safe file preview
-- [ ] Binary handling
-- [ ] Large file handling
+- [x] Git-aware file listing
+- [x] `.gitignore` support
+- [x] Tree
+- [x] Virtualization
+- [x] Filter
+- [x] Working change badges
+- [x] Safe file preview
+- [x] Binary handling
+- [x] Large file handling
 
 ## File History
 
