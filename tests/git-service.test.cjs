@@ -148,6 +148,38 @@ test("scanRepository integrates with a real local Git repository", async (t) => 
   assert.ok(result.worktrees.length >= 1);
 });
 
+test("scanRepository resolves a linked worktree as its own repository context", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-worktree-root-"));
+  const linked = `${root}-linked`;
+  t.after(() => Promise.all([
+    fs.rm(root, { recursive: true, force: true }),
+    fs.rm(linked, { recursive: true, force: true }),
+  ]));
+
+  const git = (...args) => execFileAsync("git", args, { cwd: root, encoding: "utf8" });
+  await git("init", "-b", "main");
+  await git("config", "user.name", "Repo Atlas Test");
+  await git("config", "user.email", "repo-atlas@example.test");
+  await fs.writeFile(path.join(root, "README.md"), "main\n");
+  await git("add", "README.md");
+  await git("commit", "-m", "Initial commit");
+  await git("worktree", "add", "-b", "feature/linked", linked, "main");
+  await fs.writeFile(path.join(linked, "linked.txt"), "linked\n");
+  await execFileAsync("git", ["add", "linked.txt"], { cwd: linked, encoding: "utf8" });
+  await execFileAsync("git", ["commit", "-m", "Add linked worktree file"], { cwd: linked, encoding: "utf8" });
+
+  const result = await scanRepository(linked);
+  const resolvedRoot = await fs.realpath(root);
+  const resolvedLinked = await fs.realpath(linked);
+
+  assert.equal(result.repository.rootPath, resolvedLinked);
+  assert.equal(result.repository.currentBranch, "feature/linked");
+  assert.equal(result.repository.dirty, false);
+  assert.equal(result.worktrees.length, 2);
+  assert.ok(result.worktrees.some((worktree) => worktree.path === resolvedLinked && worktree.branch === "feature/linked"));
+  assert.ok(result.worktrees.some((worktree) => worktree.path === resolvedRoot && worktree.branch === "main"));
+});
+
 test("listRepositoryFiles follows Git ignore rules and reports tracked state", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-files-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
