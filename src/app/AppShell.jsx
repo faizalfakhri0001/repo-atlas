@@ -351,6 +351,7 @@ export function AppShell({
                     fileFilterRequest={loadedSession.ui.fileFilterRequest}
                     fileSelectionRequest={loadedSession.ui.fileSelectionRequest}
                     onCompare={onCompare}
+                    onNavigate={onNavigate}
                     onCherryPick={onCherryPick}
                     onShowBranchInGraph={onShowBranchInGraph}
                     onFocusCommit={onFocusCommit}
@@ -411,6 +412,7 @@ function ViewHost({
   graphRequest,
   compareInit,
   onCompare,
+  onNavigate,
   onCherryPick,
   onShowBranchInGraph,
   onFocusCommit,
@@ -439,9 +441,12 @@ function ViewHost({
       {view === "overview" && <Overview data={data} onOpenCommit={onFocusCommit} />}
       {view === "branches" && (
         <BranchesView
+          repoPath={data.repository.rootPath}
           branches={data.branches}
           currentBranch={data.repository.currentBranch}
+          defaultBranch={data.repository.defaultBranch}
           onShowInGraph={onShowBranchInGraph}
+          onCompareWithDefault={onCompare}
           onCompareWithCurrent={(branch) => onCompare(data.repository.currentBranch, branch)}
         />
       )}
