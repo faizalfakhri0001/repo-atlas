@@ -17,6 +17,7 @@ const { listFileHistory } = require("./git/history.cjs");
 const { readFileAtRevision } = require("./git/revisions.cjs");
 const { fileBlame } = require("./git/blame.cjs");
 const { blameCache } = require("./git/blame.cjs");
+const { assertSafeWriteEnabled } = require("./operation-policy.cjs");
 const { searchRepository } = require("./git/search.cjs");
 const { getAnalyticsIndex, invalidateAnalyticsCache, serializeAnalyticsIndex } = require("./git/analytics/index.cjs");
 const { buildHotspotReport } = require("./git/analytics/hotspots.cjs");
@@ -31,6 +32,7 @@ const MAX_CONFLICT_PREDICTIONS = 25;
 const MAX_DIFF_BYTES = 1_200_000;
 const COMMIT_FORMAT = "--pretty=format:%H%x1f%P%x1f%D%x1f%an%x1f%ae%x1f%ad%x1f%s%x1e";
 const PARTIAL_REFRESH_PARTS = new Set(["status", "refs", "head", "state"]);
+const MAX_WORKSPACE_OPERATION_PATHS = 200;
 
 function parseNullFields(line, expected) {
   const fields = line.split("\0");
@@ -184,6 +186,27 @@ function parseSubmoduleStatus(raw, configItems) {
   return statusItems;
 }
 
+function isMeaningfulStatusCode(code) {
+  return Boolean(code && code !== "." && code !== " " && code !== "?" && code !== "!");
+}
+
+function decorateStatusFile({ kind, index, worktree, path: filePath }) {
+  const untracked = kind === "untracked" || index === "?" || worktree === "?";
+  const conflicted = kind === "conflict" || index === "U" || worktree === "U";
+  return {
+    kind,
+    index,
+    worktree,
+    path: filePath,
+    indexStatus: index === "." || index === " " || index === "?" || index === "!" ? null : index,
+    worktreeStatus: worktree === "." || worktree === " " || worktree === "!" ? null : worktree,
+    staged: !untracked && !conflicted && isMeaningfulStatusCode(index),
+    unstaged: !conflicted && (untracked || isMeaningfulStatusCode(worktree)),
+    untracked,
+    conflicted,
+  };
+}
+
 function parseStatus(raw) {
   const result = {
     branch: "",
@@ -204,9 +227,9 @@ function parseStatus(raw) {
       result.ahead = Number(match?.[1] ?? 0);
       result.behind = Number(match?.[2] ?? 0);
     } else if (line.startsWith("? ")) {
-      result.files.push({ kind: "untracked", index: "?", worktree: "?", path: line.slice(2) });
+      result.files.push(decorateStatusFile({ kind: "untracked", index: "?", worktree: "?", path: line.slice(2) }));
     } else if (line.startsWith("! ")) {
-      result.files.push({ kind: "ignored", index: "!", worktree: "!", path: line.slice(2) });
+      result.files.push(decorateStatusFile({ kind: "ignored", index: "!", worktree: "!", path: line.slice(2) }));
     } else if (/^[12u] /.test(line)) {
       let xy = "..";
       let filePath = "";
@@ -223,17 +246,106 @@ function parseStatus(raw) {
         xy = match?.[1] ?? "UU";
         filePath = match?.[2] ?? "";
       }
-      result.files.push({
+      result.files.push(decorateStatusFile({
         kind: line[0] === "u" ? "conflict" : line[0] === "2" ? "renamed" : "changed",
         index: xy[0],
         worktree: xy[1],
         path: filePath,
-      });
+      }));
     }
   }
 
   if (result.branch === "(detached)") result.branch = "Detached HEAD";
   return result;
+}
+
+function normalizeWorkspacePaths(paths) {
+  if (!Array.isArray(paths) || paths.length < 1 || paths.length > MAX_WORKSPACE_OPERATION_PATHS) {
+    throw new GitServiceError(`A workspace operation accepts between 1 and ${MAX_WORKSPACE_OPERATION_PATHS} paths.`, "INVALID_ARGUMENT");
+  }
+  const normalized = [...new Set(paths.map(assertRelativePath))];
+  if (normalized.length === 0) {
+    throw new GitServiceError("At least one repository-relative path is required.", "INVALID_ARGUMENT");
+  }
+  return normalized;
+}
+
+async function readWorkspaceStatusForRepository(repository) {
+  const result = await runGit(repository.rootPath, ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]);
+  return parseStatus(result.stdout);
+}
+
+function workspaceStatusFingerprint(status) {
+  return JSON.stringify({
+    branch: status.branch,
+    oid: status.oid,
+    upstream: status.upstream,
+    ahead: status.ahead,
+    behind: status.behind,
+    files: status.files,
+  });
+}
+
+function buildWorkspaceOperationRepository(repository, status) {
+  return {
+    name: repository.name,
+    rootPath: repository.rootPath,
+    currentBranch: status.branch,
+    head: status.oid,
+    shortHead: status.oid?.slice(0, 8) ?? "",
+    upstream: status.upstream,
+    ahead: status.ahead,
+    behind: status.behind,
+    dirty: status.files.some((file) => file.kind !== "ignored"),
+  };
+}
+
+async function validateWorkspacePaths(repository, paths) {
+  const normalized = normalizeWorkspacePaths(paths);
+  for (const filePath of normalized) await resolveRepositoryRelativePath(repository.rootPath, filePath);
+  return normalized;
+}
+
+async function stageFiles(repositoryPath, paths, { operationMode = "read-only" } = {}) {
+  assertSafeWriteEnabled(operationMode);
+  const repository = await resolveRepository(repositoryPath);
+  const filePaths = await validateWorkspacePaths(repository, paths);
+  const before = await readWorkspaceStatusForRepository(repository);
+  await runGit(repository.rootPath, ["--literal-pathspecs", "add", "--", ...filePaths]);
+  const status = await readWorkspaceStatusForRepository(repository);
+  return {
+    changed: workspaceStatusFingerprint(before) !== workspaceStatusFingerprint(status),
+    paths: filePaths,
+    status,
+    repository: buildWorkspaceOperationRepository(repository, status),
+    operation: "stage",
+  };
+}
+
+async function unstageFiles(repositoryPath, paths, { operationMode = "read-only" } = {}) {
+  assertSafeWriteEnabled(operationMode);
+  const repository = await resolveRepository(repositoryPath);
+  const head = await runGit(repository.rootPath, ["rev-parse", "--verify", "--quiet", "HEAD"], { allowFailure: true });
+  if (head.failed || !head.stdout.trim()) {
+    throw new GitServiceError("Unstage is not supported before the repository has its first commit.", "UNSUPPORTED_OPERATION");
+  }
+  const filePaths = await validateWorkspacePaths(repository, paths);
+  const before = await readWorkspaceStatusForRepository(repository);
+  const result = await runGit(repository.rootPath, ["--literal-pathspecs", "restore", "--staged", "--", ...filePaths], { allowFailure: true });
+  if (result.failed) {
+    if (/not a git command|unknown option|usage:.*restore/i.test(result.stderr)) {
+      throw new GitServiceError("This Git version does not support unstaging with git restore.", "UNSUPPORTED_GIT_VERSION", result.stderr);
+    }
+    throw new GitServiceError(humanizeGitError(result.stderr), "GIT_COMMAND_FAILED", result.stderr);
+  }
+  const status = await readWorkspaceStatusForRepository(repository);
+  return {
+    changed: workspaceStatusFingerprint(before) !== workspaceStatusFingerprint(status),
+    paths: filePaths,
+    status,
+    repository: buildWorkspaceOperationRepository(repository, status),
+    operation: "unstage",
+  };
 }
 
 function parseRemotes(raw) {
@@ -1162,6 +1274,8 @@ module.exports = {
   parseNameStatusZ,
   parseMergeTreeConflicts,
   parseUpstreamTrack,
+  MAX_WORKSPACE_OPERATION_PATHS,
+  normalizeWorkspacePaths,
   resolveRepository,
   parseRepositoryFileList,
   getRepositoryState,
@@ -1180,6 +1294,8 @@ module.exports = {
   repositoryHealth,
   listTrackedFileSizes,
   branchIntelligence,
+  stageFiles,
+  unstageFiles,
   PARTIAL_REFRESH_PARTS,
   invalidateRepositoryDerivedCaches,
   refreshRepositoryPartial,
