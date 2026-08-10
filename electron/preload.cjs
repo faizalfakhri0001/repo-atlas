@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("repoAtlas", {
   listRepositoryFiles: (payload) => ipcRenderer.invoke("repository:list-files", payload),
   readRepositoryFile: (payload) => ipcRenderer.invoke("repository:file-content", payload),
   fileHistory: (payload) => ipcRenderer.invoke("file:history", payload),
+  readFileAtRevision: (payload) => ipcRenderer.invoke("file:content-at-revision", payload),
   revealRepositoryFile: (payload) => ipcRenderer.invoke("repository:reveal-file", payload),
   revealRepository: (repositoryPath) => ipcRenderer.invoke("repository:reveal", repositoryPath),
   listCommits: (payload) => ipcRenderer.invoke("commits:list", payload),

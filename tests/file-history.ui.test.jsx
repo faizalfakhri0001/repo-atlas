@@ -1,16 +1,17 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FileHistory } from "@/components/file-history";
 
-const { fileHistory, fileDiff } = vi.hoisted(() => ({
+const { fileHistory, fileDiff, readFileAtRevision } = vi.hoisted(() => ({
   fileHistory: vi.fn(),
   fileDiff: vi.fn(),
+  readFileAtRevision: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
-  api: { fileHistory, fileDiff },
+  api: { fileHistory, fileDiff, readFileAtRevision },
 }));
 
 const entries = [
@@ -58,6 +59,7 @@ function HistoryHarness() {
 }
 
 describe("FileHistory", () => {
+  beforeEach(() => vi.clearAllMocks());
   afterEach(() => cleanup());
 
   it("loads history, filters locally, and opens the selected commit diff", async () => {
@@ -83,5 +85,13 @@ describe("FileHistory", () => {
       path: "src/domain/account.js",
       oldPath: "src/user.js",
     });
+
+    readFileAtRevision.mockResolvedValue({
+      ok: true,
+      data: { hash: "b".repeat(40), path: "src/domain/account.js", text: "export const account = true;\n", binary: false, truncated: false, size: 29, language: "JavaScript" },
+    });
+    await user.click(screen.getByRole("tab", { name: "File at commit" }));
+    expect(await screen.findByText("export const account = true;")).toBeInTheDocument();
+    expect(readFileAtRevision).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository", hash: "b".repeat(40), path: "src/domain/account.js" });
   });
 });

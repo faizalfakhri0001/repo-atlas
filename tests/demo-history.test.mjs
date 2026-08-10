@@ -13,3 +13,14 @@ test("demo API provides paginated file history entries", async () => {
   assert.equal(typeof response.data.entries[0].hash, "string");
   assert.equal(response.data.hasMore, true);
 });
+
+test("demo API provides file content at a selected revision", async () => {
+  const api = createDemoApi();
+  const history = await api.fileHistory({ path: "src/app.jsx", limit: 1 });
+  const response = await api.readFileAtRevision({ hash: history.data.entries[0].hash, path: "src/app.jsx" });
+
+  assert.equal(response.ok, true);
+  assert.equal(response.data.path, "src/app.jsx");
+  assert.equal(response.data.binary, false);
+  assert.match(response.data.text, /Demo content|AppShell|export const ready/);
+});

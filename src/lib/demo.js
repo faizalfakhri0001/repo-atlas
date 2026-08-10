@@ -467,6 +467,17 @@ export function createDemoApi() {
         hasMore: safeSkip + safeLimit < entries.length,
       });
     },
+    readFileAtRevision: ({ hash, path: filePath } = {}) => {
+      const file = demoFiles.find((entry) => entry.path === filePath);
+      const commit = byHash.get(resolveTip(hash));
+      if (!file || !commit) return Promise.resolve({ ok: false, error: { message: "Unknown file revision.", code: "PATH_NOT_FOUND" } });
+      if (filePath === "assets/logo.bin") {
+        return ok({ hash: commit.hash, path: filePath, text: null, binary: true, truncated: false, size: 18_432, language: null });
+      }
+      const baseText = DEMO_FILE_CONTENT[filePath] ?? `// Demo content for ${filePath}\n\nexport const ready = true;\n`;
+      const text = `${baseText}\n// ${commit.subject}\n`;
+      return ok({ hash: commit.hash, path: filePath, text, binary: false, truncated: false, size: text.length, language: demoFileLanguage(filePath) });
+    },
 
     listCommits: ({ refs, order, limit = 1000, skip = 0 } = {}) => {
       let pool = commits;

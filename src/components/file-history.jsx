@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CopyButton, DiffView, FilePathLabel, FileStatusBadge } from "@/components/diff-view";
+import { RevisionFileView } from "@/components/revision-file-view";
 
 export const FILE_HISTORY_PAGE_SIZE = 200;
 
@@ -29,7 +30,7 @@ function filterHistoryEntries(entries, query, author, dateFilter) {
   });
 }
 
-export function FileHistory({ repoPath, node, state, onStateChange, onClose, onShowRevision }) {
+export function FileHistory({ repoPath, node, state, onStateChange, onClose }) {
   const [loadState, setLoadState] = useState({ loading: false, error: null });
   const [query, setQuery] = useState("");
   const [author, setAuthor] = useState("all");
@@ -106,7 +107,7 @@ export function FileHistory({ repoPath, node, state, onStateChange, onClose, onS
     };
   };
 
-  const selectEntry = (entry) => onStateChange?.({ ...state, selectedHash: entry.hash });
+  const selectEntry = (entry) => onStateChange?.({ ...state, selectedHash: entry.hash, detailMode: "diff" });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -191,13 +192,36 @@ export function FileHistory({ repoPath, node, state, onStateChange, onClose, onS
               <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2 text-xs">
                 <span className="min-w-0 flex-1 truncate font-medium">{selectedEntry.subject}</span>
                 <code className="font-mono text-muted-foreground">{selectedEntry.shortHash}</code>
-                {onShowRevision && <Button variant="outline" size="sm" onClick={() => onShowRevision(selectedEntry)}>File at commit</Button>}
+                <div role="tablist" aria-label="Commit file view" className="flex items-center gap-1">
+                  <Button
+                    role="tab"
+                    aria-selected={state?.detailMode !== "revision"}
+                    variant={state?.detailMode === "revision" ? "ghost" : "secondary"}
+                    size="sm"
+                    onClick={() => onStateChange?.({ ...state, detailMode: "diff" })}
+                  >
+                    Diff
+                  </Button>
+                  <Button
+                    role="tab"
+                    aria-selected={state?.detailMode === "revision"}
+                    variant={state?.detailMode === "revision" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => onStateChange?.({ ...state, detailMode: "revision" })}
+                  >
+                    File at commit
+                  </Button>
+                </div>
               </div>
               <div className="min-h-0 flex-1 overflow-auto">
-                <DiffView
-                  repoPath={repoPath}
-                  request={{ from: selectedEntry.parentHash, to: selectedEntry.hash, path: selectedEntry.path, oldPath: selectedEntry.oldPath || undefined }}
-                />
+                {state?.detailMode === "revision" ? (
+                  <RevisionFileView repoPath={repoPath} entry={selectedEntry} />
+                ) : (
+                  <DiffView
+                    repoPath={repoPath}
+                    request={{ from: selectedEntry.parentHash, to: selectedEntry.hash, path: selectedEntry.path, oldPath: selectedEntry.oldPath || undefined }}
+                  />
+                )}
               </div>
             </div>
           ) : (
