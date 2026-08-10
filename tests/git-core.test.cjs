@@ -4,10 +4,19 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const {
+  assertRefName,
   assertRelativePath,
   resolveRepositoryRelativePath,
   resolveRepositoryFilePath,
 } = require("../electron/git/core.cjs");
+
+test("ref validation accepts namespaced branches and rejects unsafe refs", () => {
+  assert.equal(assertRefName("feature/login"), "feature/login");
+  assert.equal(assertRefName("refs/heads/feature/login"), "refs/heads/feature/login");
+  for (const input of ["/feature", "feature/", "feature//login", "feature\nlogin", "feature~login"]) {
+    assert.throws(() => assertRefName(input));
+  }
+});
 
 test("repository path validation normalizes safe relative paths", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-path-"));

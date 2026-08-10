@@ -95,9 +95,12 @@ function assertRefName(value) {
     ref.length > 0 &&
     ref.length <= 512 &&
     !ref.startsWith("-") &&
+    !ref.startsWith("/") &&
+    !ref.endsWith("/") &&
+    !ref.includes("//") &&
     !ref.includes("..") &&
     !ref.endsWith(".lock") &&
-    !/[\0\n\s~^:?*[\\]/.test(ref) &&
+    !/[\0\n\r\s~^:?*[\\]/.test(ref) &&
     !ref.includes("@{");
   if (!looksValid) {
     throw new GitServiceError(`"${ref || "(empty)"}" is not a valid ref name.`, "INVALID_ARGUMENT");
