@@ -7,6 +7,7 @@ import {
   FileCode2,
   Folder,
   FolderOpen,
+  History as HistoryIcon,
   LoaderCircle,
   Search,
 } from "lucide-react";
@@ -22,6 +23,7 @@ import { cn, copyText } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { FileStatusBadge } from "@/components/diff-view";
 import { FilePreview } from "@/components/file-preview";
+import { FileHistory } from "@/components/file-history";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -34,7 +36,7 @@ import {
 const ROW_HEIGHT = 28;
 const OVERSCAN = 8;
 
-export function FileExplorer({ repoPath, status, onSelectFile }) {
+export function FileExplorer({ repoPath, status, onSelectFile, historyState, onHistoryStateChange }) {
   const [state, setState] = useState({ loading: true, error: null, files: [] });
   const [expandedPaths, setExpandedPaths] = useState(() => new Set());
   const [selectedPath, setSelectedPath] = useState(null);
@@ -88,6 +90,14 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
   const renderedRows = visibleRows.slice(firstRow, lastRow);
 
   useEffect(() => {
+    if (!historyState?.selectedPath) return;
+    const nextNode = indexedFiles.find((file) => file.path === historyState.selectedPath);
+    if (!nextNode) return;
+    setSelectedPath(nextNode.path);
+    setSelectedNode(nextNode);
+  }, [historyState?.selectedPath, indexedFiles]);
+
+  useEffect(() => {
     if (filteredFiles.length === 0) return;
     setExpandedPaths((current) => {
       if (query.trim()) return new Set(collectDirectoryPaths(tree));
@@ -108,7 +118,15 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
   const selectFile = (node) => {
     setSelectedPath(node.path);
     setSelectedNode(node);
+    onHistoryStateChange?.(null);
     onSelectFile?.(node);
+  };
+
+  const openHistory = (node) => {
+    if (!node || node.type !== "file") return;
+    setSelectedPath(node.path);
+    setSelectedNode(node);
+    onHistoryStateChange?.({ selectedPath: node.path, selectedHash: null, entries: [], hasMore: false, loaded: false, scrollTop: 0 });
   };
 
   const focusNode = (node) => {
@@ -254,6 +272,9 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
                               <ContextMenuItem onSelect={() => copyText(node.path)}>
                                 <Copy /> Copy Relative Path
                               </ContextMenuItem>
+                              <ContextMenuItem onSelect={() => openHistory(node)}>
+                                <HistoryIcon /> View History
+                              </ContextMenuItem>
                               <ContextMenuSeparator />
                               <ContextMenuItem onSelect={() => api.revealRepositoryFile?.({ repositoryPath: repoPath, path: node.path })}>
                                 <ExternalLink /> Reveal in File Manager
@@ -271,7 +292,11 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
         </aside>
 
         <main className="min-w-0 flex-1">
-          <FilePreview repoPath={repoPath} node={selectedNode} />
+          {historyState?.selectedPath === selectedPath && selectedNode ? (
+            <FileHistory repoPath={repoPath} node={selectedNode} state={historyState} onStateChange={onHistoryStateChange} onClose={() => onHistoryStateChange?.(null)} />
+          ) : (
+            <FilePreview repoPath={repoPath} node={selectedNode} onOpenHistory={() => openHistory(selectedNode)} />
+          )}
         </main>
       </div>
     </div>

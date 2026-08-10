@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileWarning, LoaderCircle, ScanLine } from "lucide-react";
+import { FileWarning, History as HistoryIcon, LoaderCircle, ScanLine } from "lucide-react";
 import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { CopyButton, FilePathLabel, FileStatusBadge } from "@/components/diff-view";
 
 function formatBytes(value) {
@@ -15,7 +16,7 @@ function lineNumberWidth(lineCount) {
   return `${Math.max(2, String(lineCount).length)}ch`;
 }
 
-export function FilePreview({ repoPath, node }) {
+export function FilePreview({ repoPath, node, onOpenHistory }) {
   const [state, setState] = useState({ loading: false, error: null, data: null });
   const requestKey = useMemo(() => `${repoPath ?? ""}\u0000${node?.path ?? ""}`, [repoPath, node?.path]);
 
@@ -65,7 +66,7 @@ export function FilePreview({ repoPath, node }) {
   if (state.data?.binary) {
     return (
       <div className="flex h-full flex-col">
-        <PreviewHeader node={node} data={state.data} />
+        <PreviewHeader node={node} data={state.data} onOpenHistory={onOpenHistory} />
         {state.data?.truncated && <PreviewLimitNotice size={state.data.size} />}
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center text-sm text-muted-foreground">
           <ScanLine className="size-6" />
@@ -80,7 +81,7 @@ export function FilePreview({ repoPath, node }) {
   const lines = String(state.data?.text ?? "").split("\n");
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PreviewHeader node={node} data={state.data} />
+      <PreviewHeader node={node} data={state.data} onOpenHistory={onOpenHistory} />
       {state.data?.truncated && <PreviewLimitNotice size={state.data.size} />}
       <div className="min-h-0 flex-1 overflow-auto bg-background/40">
         <pre className="min-w-fit font-mono text-[12px] leading-5">
@@ -112,13 +113,14 @@ function PreviewLimitNotice({ size }) {
   );
 }
 
-function PreviewHeader({ node, data }) {
+function PreviewHeader({ node, data, onOpenHistory }) {
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
       <FilePathLabel path={node.path} className="min-w-0 flex-1 text-xs" />
       {node.status && <FileStatusBadge status={node.status} />}
       {data?.language && <Badge variant="muted">{data.language}</Badge>}
       {data?.size != null && <span className="shrink-0 text-[11px] text-muted-foreground">{formatBytes(data.size)}</span>}
+      {onOpenHistory && <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={onOpenHistory}><HistoryIcon /> History</Button>}
       <CopyButton value={node.path} title="Copy path" />
     </div>
   );
