@@ -191,6 +191,23 @@ async function resolveRepositoryRelativePath(repositoryRoot, input) {
   return target;
 }
 
+async function resolveRepositoryFilePath(repositoryRoot, input) {
+  const target = await resolveRepositoryRelativePath(repositoryRoot, input);
+  let stats;
+  try {
+    stats = await fs.stat(target);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      throw new GitServiceError("The requested file does not exist.", "PATH_NOT_FOUND");
+    }
+    throw new GitServiceError("The requested file could not be inspected.", "INVALID_PATH", error.message);
+  }
+  if (!stats.isFile()) {
+    throw new GitServiceError("The requested path is not a regular file.", "INVALID_PATH");
+  }
+  return target;
+}
+
 async function resolveCommit(cwd, refOrHash) {
   const ref = HASH_PATTERN.test(String(refOrHash).trim())
     ? assertCommitHash(refOrHash)
@@ -251,6 +268,7 @@ module.exports = {
   assertRefName,
   assertRelativePath,
   resolveRepositoryRelativePath,
+  resolveRepositoryFilePath,
   resolveCommit,
   validateDirectory,
   resolveRepository,

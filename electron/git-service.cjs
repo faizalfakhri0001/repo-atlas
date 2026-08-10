@@ -8,6 +8,7 @@ const {
   assertRefName,
   assertRelativePath,
   resolveRepositoryRelativePath,
+  resolveRepositoryFilePath,
   resolveCommit,
   resolveRepository,
 } = require("./git/core.cjs");
@@ -963,6 +964,7 @@ module.exports = {
   assertRefName,
   assertRelativePath,
   resolveRepositoryRelativePath,
+  resolveRepositoryFilePath,
   parseBranches,
   parseCommits,
   parseWorktrees,
