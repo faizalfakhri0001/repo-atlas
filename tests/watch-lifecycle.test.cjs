@@ -64,7 +64,9 @@ test("RepositoryWatcher clears pending events when it stops", async () => {
 
 test("WatchManager owns one watcher per session and disposes it", async () => {
   const fakeWatchers = [];
+  const changes = [];
   const manager = new WatchManager({
+    onChange: (event) => changes.push(event),
     watcherFactory: {
       resolveRepositoryFn: async (repositoryPath) => ({ rootPath: repositoryPath, gitDir: `${repositoryPath}/.git` }),
       countVisibleFilesFn: async () => 1,
@@ -81,6 +83,15 @@ test("WatchManager owns one watcher per session and disposes it", async () => {
   await manager.start({ sessionId: "beta", repositoryPath: "/repo/beta", mode: "git-only" });
   assert.equal(manager.size, 2);
   assert.equal(fakeWatchers[0].closed, true);
+
+  fakeWatchers[1].emit("all", "change", "/repo/alpha/.git/index");
+  fakeWatchers[2].emit("all", "change", "/repo/beta/.git/index");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.deepEqual(changes.map((event) => ({ sessionId: event.sessionId, repositoryPath: event.repositoryPath })), [
+    { sessionId: "alpha", repositoryPath: "/repo/alpha" },
+    { sessionId: "beta", repositoryPath: "/repo/beta" },
+  ]);
+
   await manager.stop("alpha");
   await manager.stopAll();
   assert.equal(manager.size, 0);
