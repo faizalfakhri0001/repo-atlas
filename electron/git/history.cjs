@@ -1,3 +1,13 @@
+const path = require("node:path");
+const {
+  runGit,
+  resolveRepository,
+  resolveRepositoryRelativePath,
+} = require("./core.cjs");
+
+const DEFAULT_HISTORY_LIMIT = 200;
+const MAX_HISTORY_LIMIT = 1000;
+const FILE_HISTORY_FORMAT = "--format=%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s";
 const HISTORY_STATUS_PATTERN = /^([A-Z])(?:([0-9]{1,3}))?\t([\s\S]*)$/;
 
 function parseHistoryChangeLine(line) {
@@ -60,8 +70,45 @@ function parseFileHistory(raw, currentPath = "") {
     .filter(Boolean);
 }
 
+function normalizeHistoryLimit(value) {
+  const requested = Number(value);
+  if (!Number.isFinite(requested) || requested < 1) return DEFAULT_HISTORY_LIMIT;
+  return Math.min(Math.floor(requested), MAX_HISTORY_LIMIT);
+}
+
+async function listFileHistory(repositoryPath, options = {}) {
+  const repository = await resolveRepository(repositoryPath);
+  const target = await resolveRepositoryRelativePath(repository.rootPath, options.path);
+  const currentPath = path.relative(repository.rootPath, target).split(path.sep).join("/");
+  const limit = normalizeHistoryLimit(options.limit);
+  const skip = Math.max(Math.floor(Number(options.skip) || 0), 0);
+  const result = await runGit(repository.rootPath, [
+    "log",
+    "--follow",
+    "-M",
+    "--date=iso-strict",
+    "--name-status",
+    "-n",
+    String(limit + 1),
+    `--skip=${skip}`,
+    FILE_HISTORY_FORMAT,
+    "--",
+    currentPath,
+  ]);
+  const parsed = parseFileHistory(result.stdout, currentPath);
+  return {
+    currentPath,
+    entries: parsed.slice(0, limit),
+    hasMore: parsed.length > limit,
+  };
+}
+
 module.exports = {
+  DEFAULT_HISTORY_LIMIT,
+  MAX_HISTORY_LIMIT,
+  FILE_HISTORY_FORMAT,
   parseFileHistory,
   parseHistoryChangeLine,
   parseHistoryRecord,
+  listFileHistory,
 };
