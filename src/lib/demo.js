@@ -202,6 +202,44 @@ function filesForCommit(commit) {
   return files;
 }
 
+function demoFileEntry(filePath, tracked = true) {
+  const name = filePath.split("/").pop();
+  const dot = name.lastIndexOf(".");
+  return {
+    path: filePath,
+    name,
+    extension: dot > 0 ? name.slice(dot + 1).toLowerCase() : "",
+    tracked,
+    size: null,
+  };
+}
+
+const DEMO_FILE_CONTENT = {
+  "src/app.jsx": `import { AppShell } from "./app-shell";\n\nexport function App() {\n  return <AppShell />;\n}\n`,
+  "src/lib/session.js": `export function createSession(repository) {\n  return { repository, openedAt: Date.now() };\n}\n`,
+  "docs/setup.md": `# Acme Storefront\n\nInstall dependencies with npm install, then run npm run dev.\n`,
+  "notes/todo.md": `# Follow-up\n\n- Add release notes for the next checkout update.\n- Verify the payment webhook retry policy.\n`,
+};
+
+const DEMO_LANGUAGE_BY_EXTENSION = {
+  css: "CSS",
+  html: "HTML",
+  js: "JavaScript",
+  jsx: "JavaScript",
+  json: "JSON",
+  md: "Markdown",
+  py: "Python",
+  ts: "TypeScript",
+  tsx: "TypeScript",
+  yaml: "YAML",
+  yml: "YAML",
+};
+
+function demoFileLanguage(filePath) {
+  const extension = filePath.split(".").pop()?.toLowerCase() ?? "";
+  return DEMO_LANGUAGE_BY_EXTENSION[extension] ?? null;
+}
+
 function fakeDiff(filePath, additions, deletions) {
   const stem = filePath.split("/").pop().replace(/\W/g, "_");
   const added = Math.max(1, Math.min(additions, 12));
@@ -232,6 +270,12 @@ export function createDemoApi() {
   const dataset = buildDataset();
   const { commits, byHash, branchTips, tags } = dataset;
   const mainTip = dataset.main;
+  const demoFiles = [
+    ...FILE_POOL.map((filePath) => demoFileEntry(filePath)),
+    demoFileEntry("notes/todo.md", false),
+    demoFileEntry("assets/logo.bin"),
+    demoFileEntry("logs/output.txt"),
+  ];
 
   const localBranches = [
     { name: "main", tip: mainTip },
@@ -362,6 +406,24 @@ export function createDemoApi() {
     openRepository: () => Promise.resolve("/demo/acme-storefront"),
     revealRepository: () => Promise.resolve({ ok: true }),
     scanRepository: () => ok(scanData()),
+    listRepositoryFiles: () => ok(demoFiles),
+    readRepositoryFile: ({ path: filePath } = {}) => {
+      const file = demoFiles.find((entry) => entry.path === filePath);
+      if (!file) return Promise.resolve({ ok: false, error: { message: "Unknown demo file.", code: "PATH_NOT_FOUND" } });
+      if (filePath === "assets/logo.bin") {
+        return ok({ path: filePath, text: null, binary: true, truncated: false, size: 18_432, language: null });
+      }
+      const truncated = filePath === "logs/output.txt";
+      const text = DEMO_FILE_CONTENT[filePath] ?? `// Demo content for ${filePath}\n\nexport const ready = true;\n`;
+      return ok({
+        path: filePath,
+        text,
+        binary: false,
+        truncated,
+        size: truncated ? 2 * 1024 * 1024 : text.length,
+        language: demoFileLanguage(filePath),
+      });
+    },
 
     listCommits: ({ refs, order, limit = 1000, skip = 0 } = {}) => {
       let pool = commits;
