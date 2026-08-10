@@ -49,6 +49,12 @@ describe("FileExplorer", () => {
     await user.click(screen.getByRole("treeitem", { name: "src" }));
     expect(screen.queryByRole("treeitem", { name: "app.js" })).not.toBeInTheDocument();
     const filter = screen.getByRole("textbox", { name: "Filter files" });
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("treeitem", { name: "app.js" })).toBeInTheDocument();
+    await user.keyboard("{ArrowLeft}");
+    expect(screen.queryByRole("treeitem", { name: "app.js" })).not.toBeInTheDocument();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "p", ctrlKey: true }));
+    expect(filter).toHaveFocus();
     await user.type(filter, "README");
     expect(screen.getByRole("treeitem", { name: "README.md" })).toBeInTheDocument();
     expect(screen.queryByRole("treeitem", { name: "src" })).not.toBeInTheDocument();

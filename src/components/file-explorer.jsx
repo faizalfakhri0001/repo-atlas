@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -31,6 +31,19 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
   const [selectedNode, setSelectedNode] = useState(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [query, setQuery] = useState("");
+  const filterRef = useRef(null);
+  const rowRefs = useRef(new Map());
+
+  useEffect(() => {
+    const handleQuickFileShortcut = (event) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "p") return;
+      event.preventDefault();
+      filterRef.current?.focus();
+      filterRef.current?.select();
+    };
+    window.addEventListener("keydown", handleQuickFileShortcut);
+    return () => window.removeEventListener("keydown", handleQuickFileShortcut);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +101,50 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
     onSelectFile?.(node);
   };
 
+  const focusNode = (node) => {
+    if (!node) return;
+    const element = rowRefs.current.get(node.id);
+    if (!element) return;
+    element.focus();
+    if (typeof element.scrollIntoView === "function") element.scrollIntoView({ block: "nearest" });
+  };
+
+  const handleTreeKeyDown = (event, node) => {
+    const currentIndex = visibleRows.findIndex(({ node: candidate }) => candidate.id === node.id);
+    const focusRelative = (offset) => focusNode(visibleRows[currentIndex + offset]?.node);
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      focusRelative(event.key === "ArrowDown" ? 1 : -1);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (node.type === "directory") toggleDirectory(node.path);
+      else selectFile(node);
+      return;
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      if (node.type === "file") {
+        selectFile(node);
+      } else if (!expandedPaths.has(node.path)) {
+        toggleDirectory(node.path);
+      } else {
+        focusNode(node.children[0]);
+      }
+      return;
+    }
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      if (node.type === "directory" && expandedPaths.has(node.path)) {
+        toggleDirectory(node.path);
+        return;
+      }
+      const parentPath = node.path.includes("/") ? node.path.slice(0, node.path.lastIndexOf("/")) : "";
+      focusNode(visibleRows.find(({ node: candidate }) => candidate.path === parentPath)?.node);
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
@@ -104,6 +161,7 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
         <div className="relative ml-auto w-56">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={filterRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Filter files…"
@@ -141,6 +199,10 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
                         key={node.id}
                         type="button"
                         role="treeitem"
+                        ref={(element) => {
+                          if (element) rowRefs.current.set(node.id, element);
+                          else rowRefs.current.delete(node.id);
+                        }}
                         aria-expanded={isDirectory ? isExpanded : undefined}
                         aria-selected={node.path === selectedPath}
                         onClick={() => (isDirectory ? toggleDirectory(node.path) : selectFile(node))}
@@ -151,6 +213,8 @@ export function FileExplorer({ repoPath, status, onSelectFile }) {
                         style={{ paddingLeft: `${8 + depth * 16}px` }}
                         aria-label={node.name}
                         title={node.path}
+                        data-file-tree-row="true"
+                        onKeyDown={(event) => handleTreeKeyDown(event, node)}
                       >
                         {isDirectory ? (
                           isExpanded ? <ChevronDown className="size-3 shrink-0" /> : <ChevronRight className="size-3 shrink-0" />
