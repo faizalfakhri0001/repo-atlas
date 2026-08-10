@@ -20,6 +20,7 @@ import {
   Moon,
   RefreshCw,
   Sun,
+  UsersRound,
   Workflow,
 } from "lucide-react";
 import { api, isDemo } from "@/lib/api";
@@ -39,6 +40,7 @@ import { WorktreesView, SubmodulesView, RefsView } from "@/features/metadata";
 import { WorkspaceView } from "@/features/workspace";
 import { FileExplorer } from "@/features/files";
 import { HotspotsView } from "@/features/hotspots";
+import { OwnershipView } from "@/features/ownership";
 import { GlobalSearch } from "@/features/search";
 import { CherryPickDialog } from "@/components/cherry-pick-dialog";
 import { StateBanner } from "@/features/repository";
@@ -59,6 +61,7 @@ const NAV_ITEMS = [
   { id: "commits", label: "Commits", icon: GitCommitHorizontal },
   { id: "files", label: "Files", icon: Files },
   { id: "hotspots", label: "Hotspots", icon: Flame },
+  { id: "ownership", label: "Ownership", icon: UsersRound },
   { id: "branches", label: "Branches", icon: GitBranch },
   { id: "compare", label: "Compare / PR", icon: GitCompareArrows },
   { id: "worktrees", label: "Worktrees", icon: Workflow },
@@ -470,6 +473,7 @@ function ViewHost({
         />
       )}
       {view === "hotspots" && <HotspotsView repoPath={data.repository.rootPath} onOpenFileHistory={onOpenFileHistory} />}
+      {view === "ownership" && <OwnershipView repoPath={data.repository.rootPath} />}
       {view === "refs" && <RefsView data={data} />}
     </>
   );
