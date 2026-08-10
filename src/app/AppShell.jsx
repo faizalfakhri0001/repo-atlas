@@ -82,6 +82,7 @@ export function AppShell({
   onOpen,
   onRefresh,
   onNavigate,
+  onRequestNavigation,
   onCompare,
   onCherryPick,
   onShowBranchInGraph,
@@ -181,6 +182,15 @@ export function AppShell({
   const conflictCount = useMemo(
     () => data?.status.files.filter((file) => file.kind === "conflict").length ?? 0,
     [data],
+  );
+
+  const handleHealthNavigation = useCallback(
+    (view, payload = {}) => {
+      if (!view) return;
+      if (onRequestNavigation) onRequestNavigation(view, payload, selectedSessionId);
+      else onNavigate(view);
+    },
+    [onNavigate, onRequestNavigation, selectedSessionId],
   );
 
   return (
@@ -360,6 +370,7 @@ export function AppShell({
                     fileHistory={loadedSession.ui.fileHistory}
                     fileFilterRequest={loadedSession.ui.fileFilterRequest}
                     fileSelectionRequest={loadedSession.ui.fileSelectionRequest}
+                    navigationRequest={loadedSession.ui.navigationRequest}
                     onCompare={onCompare}
                     onNavigate={onNavigate}
                     onCherryPick={onCherryPick}
@@ -368,6 +379,7 @@ export function AppShell({
                     onShowWorkspace={onShowWorkspace}
                     onFileHistoryChange={(value) => onFileHistoryChange?.(loadedSession.id, value)}
                     onOpenFileHistory={(path) => onOpenFileHistory?.(loadedSession.id, path)}
+                    onHealthNavigate={handleHealthNavigation}
                   />
                 </div>
               ))
@@ -431,8 +443,10 @@ function ViewHost({
   fileHistory,
   fileFilterRequest,
   fileSelectionRequest,
+  navigationRequest,
   onFileHistoryChange,
   onOpenFileHistory,
+  onHealthNavigate,
 }) {
   // Commits and Compare stay mounted so their state (filters, selection,
   // loaded pages) survives navigation.
@@ -451,7 +465,6 @@ function ViewHost({
         <CompareView data={data} initial={compareInit} onCherryPick={onCherryPick} />
       </div>
       {view === "overview" && <Overview data={data} onOpenCommit={onFocusCommit} onOpenHealth={() => onNavigate("health")} />}
-      {view === "health" && <HealthView repoPath={data.repository.rootPath} revision={data.scannedAt} onNavigate={onNavigate} />}
       {view === "branches" && (
         <BranchesView
           repoPath={data.repository.rootPath}
@@ -461,6 +474,7 @@ function ViewHost({
           onShowInGraph={onShowBranchInGraph}
           onCompareWithDefault={onCompare}
           onCompareWithCurrent={(branch) => onCompare(data.repository.currentBranch, branch)}
+          initialFilter={navigationRequest?.view === "branches" ? navigationRequest.payload?.filter : null}
         />
       )}
       {view === "worktrees" && <WorktreesView worktrees={data.worktrees} />}
@@ -476,8 +490,9 @@ function ViewHost({
           onHistoryStateChange={onFileHistoryChange}
         />
       )}
-      {view === "hotspots" && <HotspotsView repoPath={data.repository.rootPath} onOpenFileHistory={onOpenFileHistory} />}
+      {view === "hotspots" && <HotspotsView repoPath={data.repository.rootPath} onOpenFileHistory={onOpenFileHistory} initialFilter={navigationRequest?.view === "hotspots" ? navigationRequest.payload?.filter : null} />}
       {view === "ownership" && <OwnershipView repoPath={data.repository.rootPath} />}
+      {view === "health" && <HealthView repoPath={data.repository.rootPath} revision={data.scannedAt} onNavigate={onHealthNavigate} />}
       {view === "refs" && <RefsView data={data} />}
     </>
   );

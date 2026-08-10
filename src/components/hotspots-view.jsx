@@ -87,15 +87,20 @@ function HotspotDetail({ file, onOpenFileHistory }) {
   );
 }
 
-export function HotspotsView({ repoPath, onOpenFileHistory }) {
+export function HotspotsView({ repoPath, onOpenFileHistory, initialFilter = null }) {
   const [state, setState] = useState({ loading: true, error: null, data: null });
   const [includeGenerated, setIncludeGenerated] = useState(false);
   const [pathPrefixDraft, setPathPrefixDraft] = useState("");
   const [pathPrefix, setPathPrefix] = useState("");
   const [query, setQuery] = useState("");
   const [extension, setExtension] = useState("all");
+  const [concentrationOnly, setConcentrationOnly] = useState(initialFilter === "concentrated");
   const [selectedPath, setSelectedPath] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    setConcentrationOnly(initialFilter === "concentrated");
+  }, [initialFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,9 +128,10 @@ export function HotspotsView({ repoPath, onOpenFileHistory }) {
     return (state.data?.files ?? []).filter((file) => {
       if (normalizedQuery && !file.path.toLowerCase().includes(normalizedQuery)) return false;
       if (extension !== "all" && fileExtension(file.path) !== extension) return false;
+      if (concentrationOnly && Number(file.ownershipConcentration) < 0.8) return false;
       return true;
     });
-  }, [extension, query, state.data?.files]);
+  }, [concentrationOnly, extension, query, state.data?.files]);
 
   const applyPathPrefix = (event) => {
     event.preventDefault();
@@ -197,6 +203,7 @@ export function HotspotsView({ repoPath, onOpenFileHistory }) {
           <input type="checkbox" checked={includeGenerated} onChange={(event) => setIncludeGenerated(event.target.checked)} aria-label="Include generated and lock files" />
           Include generated
         </label>
+        {concentrationOnly && <Badge variant="warning">Concentrated ownership</Badge>}
       </div>
 
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-card/30 px-5 py-2 text-[11px] text-muted-foreground">

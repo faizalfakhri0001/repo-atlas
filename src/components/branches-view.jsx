@@ -189,6 +189,7 @@ export function BranchesView({
   onShowInGraph,
   onCompareWithCurrent,
   onCompareWithDefault,
+  initialFilter = null,
 }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -197,6 +198,10 @@ export function BranchesView({
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(Boolean(repoPath));
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (STATUS_FILTERS.some(([value]) => value === initialFilter)) setStatusFilter(initialFilter);
+  }, [initialFilter]);
 
   useEffect(() => {
     let active = true;

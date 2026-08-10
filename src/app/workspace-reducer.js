@@ -42,6 +42,7 @@ export function createRepositorySession(repositoryPath, lastActivatedAt = Date.n
       fileHistory: null,
       fileFilterRequest: null,
       fileSelectionRequest: null,
+      navigationRequest: null,
     },
     lastActivatedAt,
   };
@@ -277,6 +278,23 @@ export function workspaceReducer(state, action) {
       const sessionId = action.sessionId ?? state.activeSessionId;
       if (!sessionId) return state;
       return updateSession(state, sessionId, (session) => ({ ...session, activeView: action.view }));
+    }
+
+    case "session/request-navigation": {
+      const sessionId = action.sessionId ?? state.activeSessionId;
+      if (!sessionId || !action.view) return state;
+      return updateSession(state, sessionId, (session) => ({
+        ...session,
+        activeView: action.view,
+        ui: {
+          ...session.ui,
+          navigationRequest: {
+            view: action.view,
+            payload: action.payload ?? {},
+            nonce: action.nonce ?? Date.now(),
+          },
+        },
+      }));
     }
 
     case "session/set-graph-request": {

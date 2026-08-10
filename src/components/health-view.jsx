@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatRelativeDate } from "@/lib/utils";
+import { resolveHealthNavigation } from "@/features/health/health-actions";
 
 const GRADE_VARIANTS = { healthy: "success", attention: "warning", warning: "destructive" };
 const SEVERITY_VARIANTS = { high: "destructive", medium: "warning", low: "muted", info: "info" };
@@ -30,7 +31,7 @@ function SignalCard({ signal, onAction }) {
             <h3 className="mt-2 text-sm font-medium">{signal.title}</h3>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{signal.description}</p>
           </div>
-          {view && <Button variant="outline" size="sm" onClick={() => onAction?.(signal.action)}>{ACTION_LABELS[view] ?? "Open view"}<ChevronRight /></Button>}
+          {view && <Button variant="outline" size="sm" onClick={() => onAction?.(resolveHealthNavigation(signal.action))}>{ACTION_LABELS[view] ?? "Open view"}<ChevronRight /></Button>}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
           {signal.metric !== undefined && <span>Metric: <strong className="font-medium text-foreground">{Number(signal.metric).toLocaleString()}</strong></span>}
@@ -129,7 +130,7 @@ export function HealthView({ repoPath, revision, onNavigate }) {
 
       <Card className="mt-5">
         <CardHeader className="flex-row flex-wrap items-end justify-between gap-3"><div><CardTitle>Signals</CardTitle><CardDescription>Each signal includes its raw metric, explanation, and optional navigation action.</CardDescription></div><label className="flex h-8 items-center rounded-md border border-input bg-background/70 px-2 text-xs"><span className="mr-2 text-muted-foreground">Severity</span><select aria-label="Filter health signals" value={severity} onChange={(event) => setSeverity(event.target.value)} className="bg-transparent text-foreground outline-none"><option value="all">All</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option><option value="info">Info</option></select></label></CardHeader>
-        <CardContent className="space-y-3">{signals.length > 0 ? signals.map((signal) => <SignalCard key={signal.id} signal={signal} onAction={(action) => onNavigate?.(action?.payload?.view, action?.payload)} />) : <div className="rounded-lg border border-border/70 bg-background/40 p-6 text-center text-sm text-muted-foreground"><CheckCircle2 className="mx-auto mb-2 size-6 text-emerald-400" />No signals match this filter.</div>}</CardContent>
+        <CardContent className="space-y-3">{signals.length > 0 ? signals.map((signal) => <SignalCard key={signal.id} signal={signal} onAction={(action) => action && onNavigate?.(action.view, action.payload)} />) : <div className="rounded-lg border border-border/70 bg-background/40 p-6 text-center text-sm text-muted-foreground"><CheckCircle2 className="mx-auto mb-2 size-6 text-emerald-400" />No signals match this filter.</div>}</CardContent>
       </Card>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">

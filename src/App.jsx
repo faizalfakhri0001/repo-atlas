@@ -181,6 +181,7 @@ function App() {
       onOpen={handleOpen}
       onRefresh={handleRefresh}
       onNavigate={actions.setActiveView}
+      onRequestNavigation={actions.requestNavigation}
       onCompare={openCompare}
       onCherryPick={openCherryPick}
       onShowBranchInGraph={showBranchInGraph}

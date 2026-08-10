@@ -60,6 +60,7 @@ export function useWorkspaceStore({ storage = null } = {}) {
       upsertRecent: (repository, lastOpenedAt) => dispatch({ type: "RECENT_UPSERT", repository, lastOpenedAt }),
       restoreWorkspace: (metadata) => dispatch({ type: "WORKSPACE_RESTORE", ...metadata }),
       setActiveView: (view, sessionId = null) => dispatch({ type: "session/set-view", view, sessionId }),
+      requestNavigation: (view, payload = {}, sessionId = null) => dispatch({ type: "session/request-navigation", view, payload, sessionId, nonce: Date.now() }),
       setGraphRequest: (request) => dispatch({ type: "session/set-graph-request", request }),
       setCompareInit: (initial) => dispatch({ type: "session/set-compare-init", initial }),
       setCherryPick: (value) => dispatch({ type: "session/set-cherry-pick", value }),
