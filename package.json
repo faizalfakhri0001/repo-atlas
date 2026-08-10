@@ -16,7 +16,7 @@
     "test": "node --test tests/*.test.cjs tests/*.test.mjs",
     "test:ui": "vitest run",
     "test:ui:watch": "vitest",
-    "check:electron": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/git/core.cjs && node --check electron/git/search.cjs && node --check electron/git-service.cjs",
+    "check:electron": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/git/core.cjs && node --check electron/git/search.cjs && node --check electron/git/blame-parser.cjs && node --check electron/git/blame-cache.cjs && node --check electron/git/blame.cjs && node --check electron/git-service.cjs",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {

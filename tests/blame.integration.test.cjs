@@ -90,3 +90,35 @@ test("fileBlame disables files that exceed the size or line guard", async (t) =>
     return true;
   });
 });
+
+test("fileBlame preserves authors across edits and a pure rename", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-blame-history-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const git = (...args) => execFileAsync("git", args, { cwd: root, encoding: "utf8" });
+  const configureAuthor = async (name, email) => {
+    await git("config", "user.name", name);
+    await git("config", "user.email", email);
+  };
+
+  await git("init", "-b", "main");
+  await configureAuthor("Author A", "author-a@example.test");
+  await fs.mkdir(path.join(root, "src"));
+  await fs.writeFile(path.join(root, "src", "original.js"), "line one\nline two\nline three\n");
+  await git("add", "src/original.js");
+  await git("commit", "-m", "Add original file");
+
+  await configureAuthor("Author B", "author-b@example.test");
+  await fs.writeFile(path.join(root, "src", "original.js"), "line one\nline two changed\nline three\n");
+  await git("commit", "-am", "Change one line");
+
+  await configureAuthor("Author C", "author-c@example.test");
+  await git("mv", "src/original.js", "src/renamed.js");
+  await git("commit", "-m", "Rename file");
+
+  const result = await fileBlame(root, { path: "src/renamed.js" });
+  assert.equal(result.lines.length, 3);
+  assert.equal(result.lines[0].author.name, "Author A");
+  assert.equal(result.lines[1].author.name, "Author B");
+  assert.equal(result.lines[1].content, "line two changed");
+  assert.equal(result.lines[2].author.name, "Author A");
+});

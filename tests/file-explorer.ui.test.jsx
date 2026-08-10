@@ -4,14 +4,15 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FileExplorer } from "@/components/file-explorer";
 
-const { listRepositoryFiles, readRepositoryFile, fileHistory } = vi.hoisted(() => ({
+const { listRepositoryFiles, readRepositoryFile, fileHistory, fileBlame } = vi.hoisted(() => ({
   listRepositoryFiles: vi.fn(),
   readRepositoryFile: vi.fn(),
   fileHistory: vi.fn(),
+  fileBlame: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
-  api: { listRepositoryFiles, readRepositoryFile, fileHistory },
+  api: { listRepositoryFiles, readRepositoryFile, fileHistory, fileBlame },
 }));
 
 function ExplorerHarness(props) {
@@ -210,5 +211,43 @@ describe("FileExplorer", () => {
 
     expect(await screen.findByText("Tune login")).toBeInTheDocument();
     expect(fileHistory).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository", path: "src/auth/login.js", limit: 200, skip: 0 });
+  });
+
+  it("opens blame from the file mode tabs", async () => {
+    listRepositoryFiles.mockResolvedValueOnce({
+      ok: true,
+      data: [{ path: "src/app.js", name: "app.js", extension: "js", tracked: true }],
+    });
+    readRepositoryFile.mockResolvedValueOnce({
+      ok: true,
+      data: { path: "src/app.js", text: "export const ready = true;\n", binary: false, truncated: false, size: 28, language: "JavaScript" },
+    });
+    fileBlame.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        path: "src/app.js",
+        revision: "a".repeat(40),
+        lines: [{
+          lineNumber: 1,
+          content: "export const ready = true;",
+          commitHash: "a".repeat(40),
+          shortHash: "aaaaaaaa",
+          author: { name: "Repo Atlas", email: "repo-atlas@example.test" },
+          authorTime: "2026-08-10T00:00:00.000Z",
+          summary: "Add ready flag",
+          boundary: true,
+        }],
+        authors: [],
+        binary: false,
+        workingTreeDirty: false,
+      },
+    });
+    const user = userEvent.setup();
+    render(<ExplorerHarness repoPath="/workspace/repository" />);
+
+    await user.click(await screen.findByRole("treeitem", { name: "app.js" }));
+    await user.click(screen.getByRole("tab", { name: "Blame" }));
+    expect(await screen.findByText("export const ready = true;")).toBeInTheDocument();
+    expect(fileBlame).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository", path: "src/app.js" });
   });
 });
