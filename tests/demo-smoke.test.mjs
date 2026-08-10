@@ -55,6 +55,19 @@ test("demo mode exposes a complete read-only repository workflow", async () => {
   assert.equal(branchReport.data.scope.concurrency, 4);
   assert.ok(branchReport.data.branches.some((branch) => branch.name === "feature/payments" && branch.analyzed));
 
+  const health = await api.repositoryHealth({ repositoryPath });
+  assert.equal(health.ok, true);
+  assert.equal(typeof health.data.score, "number");
+  const hotspots = await api.hotspots({ repositoryPath, limit: 5 });
+  assert.equal(hotspots.ok, true);
+  assert.ok(hotspots.data.files.length > 0);
+  const ownership = await api.ownership({ repositoryPath, limit: 5 });
+  assert.equal(ownership.ok, true);
+  assert.ok(ownership.data.nodes.length > 0);
+  const blame = await api.fileBlame({ repositoryPath, path: "src/app.jsx" });
+  assert.equal(blame.ok, true);
+  assert.ok(blame.data.lines.length > 0);
+
   const preview = await api.cherryPickPreview({ hashes: [firstCommit.hash] });
   assert.equal(preview.ok, true);
   assert.equal(preview.data.commits.length, 1);
@@ -62,4 +75,11 @@ test("demo mode exposes a complete read-only repository workflow", async () => {
   const writeAttempt = await api.cherryPickExecute({ hashes: [firstCommit.hash] });
   assert.equal(writeAttempt.ok, false);
   assert.equal(writeAttempt.error.code, "DEMO_MODE");
+
+  const stageAttempt = await api.stageFiles({ repositoryPath, paths: ["src/app.jsx"] });
+  assert.equal(stageAttempt.ok, false);
+  assert.equal(stageAttempt.error.code, "DEMO_MODE");
+  const hunkAttempt = await api.stageHunk({ repositoryPath, path: "src/app.jsx", hunkId: "demo-hunk" });
+  assert.equal(hunkAttempt.ok, false);
+  assert.equal(hunkAttempt.error.code, "DEMO_MODE");
 });
