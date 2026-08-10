@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileWarning, LoaderCircle, ScanLine } from "lucide-react";
 import { api } from "@/lib/api";
-import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { CopyButton, FilePathLabel, FileStatusBadge } from "@/components/diff-view";
 
