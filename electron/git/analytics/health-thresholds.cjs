@@ -1,0 +1,27 @@
+const HEALTH_THRESHOLDS = Object.freeze({
+  staleBranchDays: 90,
+  veryStaleBranchDays: 180,
+  branchBehindWarning: 50,
+  branchBehindHigh: 100,
+  largeFileBytes: 20 * 1024 * 1024,
+  veryLargeFileBytes: 100 * 1024 * 1024,
+  activityAdvisoryDays: 180,
+  ownershipConcentration: 0.8,
+  conflictPenaltyPerFile: 4,
+  conflictPenaltyMinimum: 8,
+  conflictPenaltyMaximum: 20,
+  staleBranchPenaltyMaximum: 10,
+  behindBranchPenaltyPerBranch: 3,
+  behindBranchPenaltyMaximum: 12,
+  goneBranchPenaltyPerBranch: 2,
+  goneBranchPenaltyMaximum: 8,
+  largeFilePenaltyPerFile: 2,
+  largeFilePenaltyMaximum: 10,
+  concentratedHotspotPenaltyPerFile: 2,
+  concentratedHotspotPenaltyMaximum: 10,
+  maxTrackedFiles: 50_000,
+  maxSignals: 100,
+  maxSignalDetails: 25,
+});
+
+module.exports = { HEALTH_THRESHOLDS };
