@@ -452,6 +452,95 @@ export function createDemoApi() {
     return rows;
   };
 
+  const createDemoBranchIntelligence = ({ defaultBranch: requestedDefault } = {}) => {
+    const defaultRef = requestedDefault || "main";
+    const defaultHash = resolveTip(defaultRef) || mainTip;
+    const defaultName = defaultRef.replace(/^origin\//, "");
+    const defaultReachable = reachableFrom(byHash, [defaultHash]);
+    const now = Date.now();
+    const rows = branchRows().map((branch) => {
+      const ageDays = branch.date ? Math.max(0, Math.floor((now - new Date(branch.date).getTime()) / (24 * 60 * 60 * 1000))) : null;
+      if (branch.remote) {
+        return {
+          ...branch,
+          upstream: null,
+          aheadOfUpstream: 0,
+          behindUpstream: 0,
+          goneUpstream: false,
+          defaultBranch: defaultName,
+          aheadOfDefault: null,
+          behindDefault: null,
+          mergeBase: null,
+          mergedIntoDefault: false,
+          lastCommitAt: branch.date,
+          ageDays,
+          stale: false,
+          veryStale: false,
+          status: "healthy",
+          analyzed: false,
+        };
+      }
+
+      const branchReachable = reachableFrom(byHash, [branch.hash]);
+      const aheadOfDefault = [...branchReachable].filter((hash) => !defaultReachable.has(hash)).length;
+      const behindDefault = [...defaultReachable].filter((hash) => !branchReachable.has(hash)).length;
+      const mergeBase = commits.find((commit) => defaultReachable.has(commit.hash) && branchReachable.has(commit.hash))?.hash ?? null;
+      const mergedIntoDefault = branch.name !== defaultName && defaultReachable.has(branch.hash);
+      const stale = ageDays !== null && ageDays >= 90;
+      const veryStale = ageDays !== null && ageDays >= 180;
+      const status = branch.current
+        ? "current"
+        : branch.gone
+          ? "gone"
+          : mergedIntoDefault
+            ? "merged"
+            : stale
+              ? "stale"
+              : aheadOfDefault > 0 && behindDefault > 0
+                ? "diverged"
+                : behindDefault > 0
+                  ? "behind"
+                  : aheadOfDefault > 0
+                    ? "ahead"
+                    : "healthy";
+      return {
+        ...branch,
+        aheadOfUpstream: branch.ahead,
+        behindUpstream: branch.behind,
+        goneUpstream: branch.gone,
+        defaultBranch: defaultName,
+        aheadOfDefault,
+        behindDefault,
+        mergeBase,
+        mergedIntoDefault,
+        lastCommitAt: branch.date,
+        ageDays,
+        stale,
+        veryStale,
+        status,
+        analyzed: true,
+      };
+    });
+
+    const localCount = rows.filter((branch) => !branch.remote).length;
+    return {
+      defaultBranch: defaultName,
+      defaultBranchRef: defaultRef,
+      defaultBranchSource: requestedDefault ? "explicit" : "remote",
+      defaultBranchHash: defaultHash,
+      currentBranch: "main",
+      scope: {
+        totalLocal: localCount,
+        analyzedLocal: Math.min(localCount, 500),
+        omittedLocal: Math.max(localCount - 500, 0),
+        limit: 500,
+        concurrency: 4,
+        truncated: localCount > 500,
+      },
+      branches: rows,
+    };
+  };
+
   const status = {
     branch: "main",
     oid: mainTip,
@@ -475,6 +564,7 @@ export function createDemoApi() {
       name: "acme-storefront",
       currentBranch: "main",
       defaultBranch: "main",
+      defaultBranchSource: "remote",
       head: mainTip,
       shortHead: mainTip.slice(0, 8),
       upstream: "origin/main",
@@ -602,6 +692,7 @@ export function createDemoApi() {
     revealRepositoryFile: () => Promise.resolve({ ok: true }),
     scanRepository: () => ok(scanData()),
     analyticsSummary: (payload = {}) => ok(createDemoAnalyticsSummary(commits, mainTip, payload)),
+    branchIntelligence: (payload = {}) => ok(createDemoBranchIntelligence(payload)),
     repositorySearch: (payload) => ok(searchDemoRepository(payload)),
     listRepositoryFiles: () => ok(demoFiles),
     readRepositoryFile: ({ path: filePath } = {}) => {

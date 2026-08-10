@@ -49,6 +49,12 @@ test("demo mode exposes a complete read-only repository workflow", async () => {
   assert.equal(compare.data.head.ref, "feature/payments");
   assert.ok(compare.data.ahead > 0);
 
+  const branchReport = await api.branchIntelligence({ repositoryPath });
+  assert.equal(branchReport.ok, true);
+  assert.equal(branchReport.data.defaultBranch, "main");
+  assert.equal(branchReport.data.scope.concurrency, 4);
+  assert.ok(branchReport.data.branches.some((branch) => branch.name === "feature/payments" && branch.analyzed));
+
   const preview = await api.cherryPickPreview({ hashes: [firstCommit.hash] });
   assert.equal(preview.ok, true);
   assert.equal(preview.data.commits.length, 1);
