@@ -896,6 +896,8 @@ export function createDemoApi() {
       });
     }
     const staleBranches = branches.branches.filter((branch) => !branch.remote && !branch.current && branch.stale);
+    const behindBranches = branches.branches.filter((branch) => !branch.remote && branch.behindDefault >= 50);
+    const goneBranches = branches.branches.filter((branch) => !branch.remote && (branch.goneUpstream || branch.gone));
     if (staleBranches.length > 0) {
       signals.push({
         id: "stale-local-branches",
@@ -948,6 +950,10 @@ export function createDemoApi() {
       categories,
       facts: {
         localBranchCount: branches.scope.totalLocal,
+        staleBranchCount: staleBranches.length,
+        behindBranchCount: behindBranches.length,
+        goneBranchCount: goneBranches.length,
+        defaultBranch: branches.defaultBranch,
         currentBranch: "main",
         trackedFileCount: demoFiles.filter((file) => file.tracked).length,
         largeFileCount: 0,

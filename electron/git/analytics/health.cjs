@@ -157,7 +157,15 @@ function branchSignals(branchReport = {}) {
     );
   }
 
-  return { signals, localBranchCount: localBranches.length, currentBranch };
+  return {
+    signals,
+    localBranchCount: localBranches.length,
+    staleBranchCount: stale.length,
+    behindBranchCount: behind.length,
+    goneBranchCount: gone.length,
+    defaultBranch: branchReport.defaultBranch || null,
+    currentBranch,
+  };
 }
 
 function repositorySignals(trackedFiles = {}) {
@@ -264,6 +272,10 @@ function buildHealthSignals(input = {}, { now = Date.now() } = {}) {
     signals,
     facts: {
       localBranchCount: branches.localBranchCount,
+      staleBranchCount: branches.staleBranchCount,
+      behindBranchCount: branches.behindBranchCount,
+      goneBranchCount: branches.goneBranchCount,
+      defaultBranch: branches.defaultBranch,
       currentBranch: branches.currentBranch || null,
       trackedFileCount: input.trackedFiles?.totalEntries ?? input.trackedFiles?.files?.length ?? 0,
       largeFileCount: repository.largeFiles.length,
