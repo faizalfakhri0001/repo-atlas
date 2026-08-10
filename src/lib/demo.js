@@ -1106,6 +1106,40 @@ export function createDemoApi() {
         language: demoFileLanguage(filePath),
       });
     },
+    fileBlame: ({ path: filePath, revision } = {}) => {
+      const file = demoFiles.find((entry) => entry.path === filePath);
+      if (!file) return Promise.resolve({ ok: false, error: { message: "Unknown demo file.", code: "PATH_NOT_FOUND" } });
+      const commit = byHash.get(resolveTip(revision)) ?? byHash.get(mainTip);
+      if (filePath === "assets/logo.bin") return ok({ path: filePath, revision: commit.hash, lines: [], authors: [], binary: true, workingTreeDirty: false, message: "Blame unavailable for binary files." });
+      const baseText = DEMO_FILE_CONTENT[filePath] ?? `// Demo content for ${filePath}\n\nexport const ready = true;\n`;
+      const contentLines = baseText.split(/\r?\n/);
+      if (contentLines.at(-1) === "") contentLines.pop();
+      const entries = historyFor(filePath);
+      const lines = contentLines.map((content, index) => {
+        const entry = entries[index % Math.max(entries.length, 1)] ?? null;
+        const owner = entry ? byHash.get(entry.hash) : commit;
+        return {
+          lineNumber: index + 1,
+          content,
+          commitHash: owner?.hash ?? commit.hash,
+          shortHash: owner?.shortHash ?? commit.shortHash,
+          author: { name: owner?.author ?? "Demo author", email: owner?.email ?? "demo@example.test" },
+          authorTime: owner?.date ?? commit.date,
+          summary: owner?.subject ?? commit.subject,
+          boundary: !entry || index === 0,
+        };
+      });
+      const authors = [...new Map(lines.map((line) => [`${line.author.email}\u0000${line.author.name}`, line])).values()].map((line) => ({
+        key: `${line.author.email}\u0000${line.author.name}`,
+        name: line.author.name,
+        email: line.author.email,
+        lines: lines.filter((candidate) => candidate.author.email === line.author.email && candidate.author.name === line.author.name).length,
+        lineCount: lines.filter((candidate) => candidate.author.email === line.author.email && candidate.author.name === line.author.name).length,
+        commits: new Set(lines.filter((candidate) => candidate.author.email === line.author.email && candidate.author.name === line.author.name).map((candidate) => candidate.commitHash)).size,
+        lastAuthorTime: line.authorTime,
+      }));
+      return ok({ path: filePath, revision: commit.hash, lines, authors, binary: false, workingTreeDirty: false });
+    },
     fileHistory: ({ path: filePath, limit = 200, skip = 0 } = {}) => {
       const knownFile = demoFiles.some((file) => file.path === filePath);
       if (!knownFile) return Promise.resolve({ ok: false, error: { message: "Unknown demo file.", code: "PATH_NOT_FOUND" } });

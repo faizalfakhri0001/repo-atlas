@@ -21,9 +21,11 @@ import {
 } from "@/lib/file-tree";
 import { cn, copyText } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { FileStatusBadge } from "@/components/diff-view";
 import { FilePreview } from "@/components/file-preview";
 import { FileHistory } from "@/components/file-history";
+import { BlameView } from "@/components/blame-view";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -44,11 +46,15 @@ export function FileExplorer({
   onHistoryStateChange,
   focusFilterRequest = null,
   fileSelectionRequest = null,
+  onOpenCommit,
+  onOpenFileAtRevision,
+  onOpenPreviousRevision,
 }) {
   const [state, setState] = useState({ loading: true, error: null, files: [] });
   const [expandedPaths, setExpandedPaths] = useState(() => new Set());
   const [selectedPath, setSelectedPath] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [fileMode, setFileMode] = useState("preview");
   const [scrollTop, setScrollTop] = useState(0);
   const [query, setQuery] = useState("");
   const filterRef = useRef(null);
@@ -81,6 +87,7 @@ export function FileExplorer({
     setState({ loading: true, error: null, files: [] });
     setSelectedPath(null);
     setSelectedNode(null);
+    setFileMode("preview");
     setQuery("");
     api
       .listRepositoryFiles({ repositoryPath: repoPath })
@@ -138,6 +145,7 @@ export function FileExplorer({
     setSelectedPath(node.path);
     setSelectedNode(node);
     onHistoryStateChange?.(null);
+    setFileMode("preview");
     onSelectFile?.(node);
   };
 
@@ -145,7 +153,15 @@ export function FileExplorer({
     if (!node || node.type !== "file") return;
     setSelectedPath(node.path);
     setSelectedNode(node);
+    setFileMode("history");
     onHistoryStateChange?.({ selectedPath: node.path, selectedHash: null, entries: [], hasMore: false, loaded: false, scrollTop: 0 });
+  };
+
+  const openBlame = (node = selectedNode) => {
+    if (!node || node.type !== "file") return;
+    setSelectedPath(node.path);
+    setSelectedNode(node);
+    setFileMode("blame");
   };
 
   const focusNode = (node) => {
@@ -158,7 +174,8 @@ export function FileExplorer({
 
   useEffect(() => {
     if (!fileSelectionRequest?.path) return undefined;
-    const requestKey = `${fileSelectionRequest.nonce ?? ""}:${fileSelectionRequest.path}:${fileSelectionRequest.openHistory ? "history" : "preview"}`;
+    const requestedMode = fileSelectionRequest.mode ?? (fileSelectionRequest.openHistory ? "history" : "preview");
+    const requestKey = `${fileSelectionRequest.nonce ?? ""}:${fileSelectionRequest.path}:${requestedMode}`;
     if (handledSelectionRef.current === requestKey) return undefined;
     const nextNode = indexedFiles.find((file) => file.path === fileSelectionRequest.path);
     if (!nextNode) return undefined;
@@ -166,8 +183,9 @@ export function FileExplorer({
     setQuery("");
     setSelectedPath(nextNode.path);
     setSelectedNode(nextNode);
+    setFileMode(requestedMode);
     onHistoryStateChange?.(
-      fileSelectionRequest.openHistory
+        fileSelectionRequest.openHistory
         ? { selectedPath: nextNode.path, selectedHash: null, entries: [], hasMore: false, loaded: false, scrollTop: 0 }
         : null,
     );
@@ -336,12 +354,31 @@ export function FileExplorer({
           )}
         </aside>
 
-        <main className="min-w-0 flex-1">
-          {historyState?.selectedPath === selectedPath && selectedNode ? (
-            <FileHistory repoPath={repoPath} node={selectedNode} state={historyState} onStateChange={onHistoryStateChange} onClose={() => onHistoryStateChange?.(null)} />
-          ) : (
-            <FilePreview repoPath={repoPath} node={selectedNode} onOpenHistory={() => openHistory(selectedNode)} />
+        <main className="flex min-w-0 flex-1 flex-col">
+          {selectedNode && (
+            <div role="tablist" aria-label="File view mode" className="flex shrink-0 items-center gap-1 border-b border-border bg-background/80 px-3 py-1.5">
+              <Button role="tab" aria-selected={fileMode === "preview"} variant={fileMode === "preview" ? "secondary" : "ghost"} size="sm" onClick={() => { setFileMode("preview"); onHistoryStateChange?.(null); }}>Preview</Button>
+              <Button role="tab" aria-selected={fileMode === "history"} variant={fileMode === "history" ? "secondary" : "ghost"} size="sm" onClick={() => openHistory(selectedNode)}>History</Button>
+              <Button role="tab" aria-selected={fileMode === "blame"} variant={fileMode === "blame" ? "secondary" : "ghost"} size="sm" onClick={() => openBlame(selectedNode)}>Blame</Button>
+            </div>
           )}
+          <div className="min-h-0 flex-1">
+            {fileMode === "history" && historyState?.selectedPath === selectedPath && selectedNode ? (
+              <FileHistory repoPath={repoPath} node={selectedNode} state={historyState} onStateChange={onHistoryStateChange} onClose={() => { setFileMode("preview"); onHistoryStateChange?.(null); }} />
+            ) : fileMode === "blame" ? (
+              <BlameView
+                repoPath={repoPath}
+                node={selectedNode}
+                revision={historyState?.selectedPath === selectedPath ? historyState.selectedHash : null}
+                dirty={Boolean(selectedNode?.status)}
+                onOpenCommit={onOpenCommit}
+                onOpenFileAtRevision={onOpenFileAtRevision}
+                onOpenPreviousRevision={onOpenPreviousRevision}
+              />
+            ) : (
+              <FilePreview repoPath={repoPath} node={selectedNode} onOpenHistory={() => openHistory(selectedNode)} onOpenBlame={() => openBlame(selectedNode)} />
+            )}
+          </div>
         </main>
       </div>
     </div>
