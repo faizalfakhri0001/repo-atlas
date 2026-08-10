@@ -85,6 +85,8 @@ test("stage and unstage files return refreshed status for spaces and Unicode pat
 test("workspace write operations enforce safe-write mode and path limits", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-workspace-security-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-workspace-outside-"));
+  t.after(() => fs.rm(outside, { recursive: true, force: true }));
   const git = (...args) => execFileAsync("git", args, { cwd: root, encoding: "utf8" });
   await git("init", "-b", "main");
   await git("config", "user.name", "Repo Atlas Test");
@@ -95,8 +97,30 @@ test("workspace write operations enforce safe-write mode and path limits", async
 
   await assert.rejects(() => stageFiles(root, ["app.js"]), (error) => error?.code === "READ_ONLY_MODE");
   await assert.rejects(() => stageFiles(root, ["../outside"], { operationMode: "safe-write" }), (error) => error?.code === "PATH_OUTSIDE_REPOSITORY");
+  await assert.rejects(() => stageFiles(root, [path.join(root, "app.js")], { operationMode: "safe-write" }), (error) => error?.code === "INVALID_PATH");
+  await assert.rejects(() => stageFiles(root, ["invalid\0path"], { operationMode: "safe-write" }), (error) => error?.code === "INVALID_ARGUMENT");
   await assert.rejects(
     () => stageFiles(root, Array.from({ length: MAX_WORKSPACE_OPERATION_PATHS + 1 }, (_, index) => `file-${index}.js`), { operationMode: "safe-write" }),
     (error) => error?.code === "INVALID_ARGUMENT",
   );
+
+  await fs.writeFile(path.join(outside, "outside.js"), "outside\n");
+  try {
+    await fs.symlink(path.join(outside, "outside.js"), path.join(root, "linked.js"));
+  } catch (error) {
+    if (error?.code === "EPERM" || error?.code === "EACCES") {
+      t.skip("Symlink creation is unavailable in this environment.");
+      return;
+    }
+    throw error;
+  }
+  await assert.rejects(() => stageFiles(root, ["linked.js"], { operationMode: "safe-write" }), (error) => error?.code === "PATH_OUTSIDE_REPOSITORY");
+
+  const unborn = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-workspace-unborn-"));
+  t.after(() => fs.rm(unborn, { recursive: true, force: true }));
+  const unbornGit = (...args) => execFileAsync("git", args, { cwd: unborn, encoding: "utf8" });
+  await unbornGit("init", "-b", "main");
+  await fs.writeFile(path.join(unborn, "new.js"), "new\n");
+  await unbornGit("add", "new.js");
+  await assert.rejects(() => unstageFiles(unborn, ["new.js"], { operationMode: "safe-write" }), (error) => error?.code === "UNSUPPORTED_OPERATION");
 });
