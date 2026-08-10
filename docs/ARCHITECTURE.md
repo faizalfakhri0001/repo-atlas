@@ -13,6 +13,7 @@ Tanggung jawab:
 - navigasi antartampilan;
 - filtering dan rendering data;
 - commit graph lane calculation;
+- workspace/session state melalui reducer dan store;
 - local preference untuk theme dan repository terakhir.
 
 Renderer tidak mengimpor `electron`, `fs`, `child_process`, atau Node.js API lain.
@@ -50,9 +51,15 @@ Main process:
 - menjalankan Git service;
 - mengubah error internal menjadi object serializable.
 
-### Git service
+### Git service dan core helpers
 
-Git service menggunakan `execFile`, bukan `exec`.
+`electron/git/core.cjs` menjadi boundary bersama untuk Git dan path repository. Ia menggunakan
+`execFile`, bukan `exec`, serta menampung normalisasi error, validasi hash/ref, resolusi
+repository, dan validasi path repository-relative.
+
+`resolveRepositoryRelativePath()` menolak absolute path, null byte, traversal, dan symlink
+yang keluar dari root repository. `electron/git-service.cjs` menggunakan helper ini sebelum
+meminta diff file, lalu mengorkestrasi parser, snapshot, compare, dan cherry-pick.
 
 Setiap scan:
 

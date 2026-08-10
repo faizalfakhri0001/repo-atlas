@@ -63,10 +63,11 @@ Vite berjalan di `127.0.0.1:5173`, lalu Electron membuka renderer tersebut.
 
 ```bash
 npm test
+npm run test:ui
 npm run check:electron
 ```
 
-Test mencakup parser Git dan integrasi pemindaian terhadap repository Git lokal sementara.
+Test mencakup parser Git, integrasi pemindaian terhadap repository Git lokal sementara, dan smoke test komponen UI melalui Vitest.
 
 ## Build renderer
 
@@ -158,10 +159,17 @@ Tidak ada `fetch`, `pull`, `push`, `checkout`, `reset`, `clean`, `commit`, atau 
 ```text
 repo-atlas/
 ├── electron/
-│   ├── git-service.cjs        # Git command runner, parser, compare, cherry-pick
+│   ├── git/
+│   │   └── core.cjs           # execFile, error handling, argumen, dan path boundary
+│   ├── git-service.cjs        # Parser, snapshot, compare, dan cherry-pick
 │   ├── main.cjs               # Window lifecycle dan IPC handlers
 │   └── preload.cjs            # contextBridge API
 ├── src/
+│   ├── app/
+│   │   ├── AppShell.jsx       # Layout aplikasi dan host view
+│   │   ├── workspace-reducer.js
+│   │   └── workspace-store.js  # Session/workspace state
+│   ├── features/               # Entry point feature-based secara incremental
 │   ├── components/
 │   │   ├── ui/                # Primitives (button, dialog, popover, tabs, ...)
 │   │   ├── commit-graph.jsx   # Graph virtualized + interaksi
@@ -180,8 +188,10 @@ repo-atlas/
 │   ├── index.css
 │   └── main.jsx
 ├── tests/
+│   ├── git-core.test.cjs       # Validasi boundary repository dan symlink
 │   ├── git-service.test.cjs   # Parser + integrasi repo Git nyata
-│   └── git-graph.test.mjs     # Invariant layout graph
+│   ├── git-graph.test.mjs      # Invariant layout graph
+│   └── ui-components.ui.test.jsx # Smoke test Testing Library
 ├── components.json            # Konfigurasi shadcn/ui
 ├── vite.config.js
 └── package.json
