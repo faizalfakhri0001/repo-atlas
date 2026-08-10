@@ -45,6 +45,7 @@ function HotspotScore({ file }) {
 
 function HotspotDetail({ file, onOpenFileHistory }) {
   if (!file) return null;
+  const contributors = file.topContributors?.length ? file.topContributors : file.authors ?? [];
   return (
     <aside className="border-t border-border bg-card/30 px-5 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -59,7 +60,7 @@ function HotspotDetail({ file, onOpenFileHistory }) {
       <div className="mt-4 grid gap-2 text-xs sm:grid-cols-4">
         <div className="rounded-lg border border-border/70 bg-background/40 px-3 py-2"><div className="text-muted-foreground">Commits</div><div className="mt-1 font-medium tabular-nums">{metricValue(file.commitCount)}</div></div>
         <div className="rounded-lg border border-border/70 bg-background/40 px-3 py-2"><div className="text-muted-foreground">Historical churn</div><div className="mt-1 font-medium tabular-nums">{metricValue(file.churn)}</div></div>
-        <div className="rounded-lg border border-border/70 bg-background/40 px-3 py-2"><div className="text-muted-foreground">Contributors</div><div className="mt-1 font-medium tabular-nums">{metricValue(file.authorCount)}</div></div>
+        <div className="rounded-lg border border-border/70 bg-background/40 px-3 py-2"><div className="text-muted-foreground">Ownership concentration</div><div className="mt-1 font-medium tabular-nums">{Math.round(Number(file.ownershipConcentration ?? 0) * 100)}%</div></div>
         <div className="rounded-lg border border-border/70 bg-background/40 px-3 py-2"><div className="text-muted-foreground">Last changed</div><div className="mt-1 font-medium">{file.lastChangedAt ? formatRelativeDate(file.lastChangedAt) : "—"}</div></div>
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -70,8 +71,8 @@ function HotspotDetail({ file, onOpenFileHistory }) {
         <section>
           <h3 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Top contributors</h3>
           <div className="mt-2 space-y-1.5">
-            {(file.authors ?? []).slice(0, 5).map((author) => <div key={author.key ?? author.email ?? author.name} className="flex justify-between gap-3 text-xs"><span className="truncate">{author.name || author.email || "Unknown"}</span><span className="shrink-0 tabular-nums text-muted-foreground">{metricValue(author.commits)} commits</span></div>)}
-            {(file.authors ?? []).length === 0 && <div className="text-xs text-muted-foreground">No contributor identity recorded.</div>}
+            {contributors.slice(0, 5).map((author) => <div key={author.key ?? author.email ?? author.name} className="flex justify-between gap-3 text-xs"><span className="truncate">{author.name || author.email || "Unknown"}</span><span className="shrink-0 tabular-nums text-muted-foreground">{author.ownershipScore == null ? `${metricValue(author.commits)} commits` : `${Math.round(author.ownershipScore * 100)}% share`}</span></div>)}
+            {contributors.length === 0 && <div className="text-xs text-muted-foreground">No contributor identity recorded.</div>}
           </div>
         </section>
         <section>
@@ -222,6 +223,7 @@ export function HotspotsView({ repoPath, onOpenFileHistory }) {
               <tr className="border-b border-border">
                 <th className="px-5 py-2.5 font-medium">File</th>
                 <th className="px-3 py-2.5 font-medium">Hotspot</th>
+                <th className="px-3 py-2.5 font-medium">Primary contributor</th>
                 <th className="px-3 py-2.5 font-medium text-right">Commits</th>
                 <th className="px-3 py-2.5 font-medium text-right">Churn</th>
                 <th className="px-3 py-2.5 font-medium text-right">Authors</th>
@@ -238,6 +240,7 @@ export function HotspotsView({ repoPath, onOpenFileHistory }) {
                     <div className="mt-1 text-[10px] text-muted-foreground">{metricValue(file.additions)} additions · {metricValue(file.deletions)} deletions</div>
                   </td>
                   <td className="px-3 py-3"><HotspotScore file={file} /></td>
+                  <td className="max-w-36 px-3 py-3"><div className="truncate">{file.primaryContributor?.name || "—"}</div><div className="text-[10px] text-muted-foreground">ownership {Math.round(Number(file.ownershipConcentration ?? 0) * 100)}%</div></td>
                   <td className="px-3 py-3 text-right tabular-nums">{metricValue(file.commitCount)}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{metricValue(file.churn)}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{metricValue(file.authorCount)}</td>

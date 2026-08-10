@@ -385,6 +385,15 @@ function createDemoHotspotSummary(commits, mainTip, options = {}) {
     const commitFrequencyPercentile = demoPercentile(commitCounts, file.commits);
     const churnPercentile = demoPercentile(churnValues, file.churn);
     const hotspotScore = 0.45 * commitFrequencyPercentile + 0.35 * churnPercentile + 0.2 * recencyScore;
+    const ownershipContributors = file.authors.map((author) => ({
+      ...author,
+      commitShare: file.commits > 0 ? author.commits / file.commits : 0,
+      churnShare: file.churn > 0 ? author.churn / file.churn : 0,
+    })).map((author) => ({
+      ...author,
+      ownershipScore: file.churn > 0 ? 0.4 * author.commitShare + 0.6 * author.churnShare : author.commitShare,
+    })).sort((left, right) => right.ownershipScore - left.ownershipScore);
+    const ownershipConcentration = ownershipContributors[0]?.ownershipScore ?? 0;
     return {
       ...file,
       commitCount: file.commits,
@@ -398,6 +407,11 @@ function createDemoHotspotSummary(commits, mainTip, options = {}) {
       churnScore: churnPercentile,
       hotspotScore,
       hotspotBand: hotspotScore >= 0.75 ? "High" : hotspotScore >= 0.4 ? "Medium" : "Low",
+      ownershipScore: ownershipConcentration,
+      ownershipConcentration,
+      ownershipConcentrationLabel: ownershipConcentration >= 0.8 ? "Highly concentrated" : ownershipConcentration >= 0.6 ? "Moderately concentrated" : "Distributed",
+      primaryContributor: ownershipContributors[0] ?? null,
+      topContributors: ownershipContributors.slice(0, 10),
     };
   });
   const hotspotScores = scored.map((file) => file.hotspotScore);

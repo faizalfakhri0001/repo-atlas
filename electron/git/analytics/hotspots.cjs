@@ -1,4 +1,5 @@
 const { assertRelativePath } = require("../core.cjs");
+const { buildOwnershipData } = require("./ownership.cjs");
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 const RECENCY_WINDOW_DAYS = 180;
@@ -225,6 +226,11 @@ function serializeHotspotFile(file) {
     hotspotScore: file.hotspotScore,
     hotspotPercentile: file.hotspotPercentile,
     hotspotBand: file.hotspotBand,
+    ownershipScore: file.ownershipScore,
+    ownershipConcentration: file.ownershipConcentration,
+    ownershipConcentrationLabel: file.ownershipConcentrationLabel,
+    primaryContributor: file.primaryContributor,
+    topContributors: file.topContributors,
     recentCommits: file.recentCommits,
   };
 }
@@ -247,10 +253,20 @@ function recentCommitsForPath(index, filePath, limit = 5) {
 function buildHotspotReport(index, options = {}) {
   const limit = normalizeHotspotLimit(options.limit);
   const activities = collectFileActivity(index);
-  const scored = scoreHotspotActivity(activities, { now: options.now ?? Date.now() }).map((file) => ({
-    ...file,
-    recentCommits: recentCommitsForPath(index, file.path),
-  }));
+  const now = options.now ?? Date.now();
+  const ownership = buildOwnershipData(index, { period: "all", now });
+  const scored = scoreHotspotActivity(activities, { now }).map((file) => {
+    const ownershipNode = ownership.files.get(file.path);
+    return {
+      ...file,
+      ownershipScore: ownershipNode?.primaryContributor?.ownershipScore ?? 0,
+      ownershipConcentration: ownershipNode?.concentration ?? 0,
+      ownershipConcentrationLabel: ownershipNode?.concentrationLabel ?? "Distributed",
+      primaryContributor: ownershipNode?.primaryContributor ?? null,
+      topContributors: ownershipNode?.topContributors ?? [],
+      recentCommits: recentCommitsForPath(index, file.path),
+    };
+  });
   const filtered = filterGeneratedFiles(scored, options);
   const sorted = filtered.files.slice().sort(compareHotspotFiles);
   const files = sorted.slice(0, limit).map(serializeHotspotFile);
