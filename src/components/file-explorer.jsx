@@ -158,7 +158,7 @@ export function FileExplorer({
 
   useEffect(() => {
     if (!fileSelectionRequest?.path) return undefined;
-    const requestKey = `${fileSelectionRequest.nonce ?? ""}:${fileSelectionRequest.path}`;
+    const requestKey = `${fileSelectionRequest.nonce ?? ""}:${fileSelectionRequest.path}:${fileSelectionRequest.openHistory ? "history" : "preview"}`;
     if (handledSelectionRef.current === requestKey) return undefined;
     const nextNode = indexedFiles.find((file) => file.path === fileSelectionRequest.path);
     if (!nextNode) return undefined;
@@ -166,7 +166,11 @@ export function FileExplorer({
     setQuery("");
     setSelectedPath(nextNode.path);
     setSelectedNode(nextNode);
-    onHistoryStateChange?.(null);
+    onHistoryStateChange?.(
+      fileSelectionRequest.openHistory
+        ? { selectedPath: nextNode.path, selectedHash: null, entries: [], hasMore: false, loaded: false, scrollTop: 0 }
+        : null,
+    );
     setExpandedPaths((current) => {
       const next = new Set(current);
       const parts = nextNode.path.split("/");

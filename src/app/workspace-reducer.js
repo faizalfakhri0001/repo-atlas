@@ -331,7 +331,11 @@ export function workspaceReducer(state, action) {
         ...session,
         ui: {
           ...session.ui,
-          fileSelectionRequest: { path: action.path, nonce: action.nonce ?? Date.now() },
+          fileSelectionRequest: {
+            path: action.path,
+            nonce: action.nonce ?? Date.now(),
+            ...(action.openHistory ? { openHistory: true } : {}),
+          },
         },
       }));
     }

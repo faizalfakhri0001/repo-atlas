@@ -174,4 +174,41 @@ describe("FileExplorer", () => {
     expect(await screen.findByText("export const login = true;")).toBeInTheDocument();
     expect(readRepositoryFile).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository", path: "src/auth/login.js" });
   });
+
+  it("opens history when a hotspot requests a file history", async () => {
+    listRepositoryFiles.mockResolvedValueOnce({
+      ok: true,
+      data: [{ path: "src/auth/login.js", name: "login.js", extension: "js", tracked: true }],
+    });
+    fileHistory.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        currentPath: "src/auth/login.js",
+        entries: [{
+          hash: "b".repeat(40),
+          shortHash: "bbbbbbbb",
+          parentHash: null,
+          subject: "Tune login",
+          author: { name: "Repo Atlas Test", email: "repo-atlas@example.test" },
+          date: "2026-08-10T10:00:00+07:00",
+          status: "M",
+          path: "src/auth/login.js",
+        }],
+        hasMore: false,
+      },
+    });
+    readRepositoryFile.mockResolvedValueOnce({
+      ok: true,
+      data: { path: "src/auth/login.js", text: "export const login = true;\n", binary: false, truncated: false, size: 28, language: "JavaScript" },
+    });
+    render(
+      <ExplorerHarness
+        repoPath="/workspace/repository"
+        fileSelectionRequest={{ path: "src/auth/login.js", nonce: 10, openHistory: true }}
+      />,
+    );
+
+    expect(await screen.findByText("Tune login")).toBeInTheDocument();
+    expect(fileHistory).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository", path: "src/auth/login.js", limit: 200, skip: 0 });
+  });
 });

@@ -135,6 +135,16 @@ function App() {
     [actions, activeSession?.snapshot],
   );
 
+  const openFileHistory = useCallback(
+    (filePath, sessionId = null) => {
+      const targetSession = sessionId ? state.sessions.find((candidate) => candidate.id === sessionId) : activeSession;
+      if (!targetSession?.snapshot || !filePath) return;
+      actions.setActiveView("files", sessionId);
+      actions.requestFileSelection(filePath, Date.now(), true, sessionId);
+    },
+    [actions, activeSession, state.sessions],
+  );
+
   const openRecentRepository = useCallback(
     (repositoryPath) => (repositoryPath ? loadRepository(repositoryPath) : handleOpen()),
     [handleOpen, loadRepository],
@@ -179,6 +189,7 @@ function App() {
       onShowWorkspace={showWorkspace}
       onQuickOpenFile={quickOpenFile}
       onOpenFile={openFile}
+      onOpenFileHistory={openFileHistory}
       onFileHistoryChange={(sessionId, value) => actions.setFileHistory(value, sessionId)}
       onClearCherryPick={() => actions.setCherryPick(null)}
       onActivateRepository={activateRepository}
