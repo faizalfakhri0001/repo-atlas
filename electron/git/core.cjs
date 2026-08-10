@@ -110,7 +110,85 @@ function assertRelativePath(value) {
   if (!filePath || filePath.length > 4096 || filePath.includes("\0")) {
     throw new GitServiceError("A valid file path is required.", "INVALID_ARGUMENT");
   }
-  return filePath;
+
+  const portablePath = filePath.replaceAll("\\", "/");
+  const isAbsolute =
+    path.posix.isAbsolute(portablePath) ||
+    path.win32.isAbsolute(filePath) ||
+    /^[A-Za-z]:/.test(filePath);
+  if (isAbsolute) {
+    throw new GitServiceError("File paths must be relative to the repository.", "INVALID_PATH");
+  }
+
+  const normalized = path.posix.normalize(portablePath);
+  if (!normalized || normalized === "." || normalized === ".." || normalized.startsWith("../")) {
+    throw new GitServiceError("File path must remain inside the repository.", "PATH_OUTSIDE_REPOSITORY");
+  }
+  return normalized;
+}
+
+function isPathInside(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+async function verifySymlinkBoundary(repositoryRoot, target) {
+  let realRoot;
+  try {
+    realRoot = await fs.realpath(repositoryRoot);
+  } catch {
+    throw new GitServiceError("The repository root could not be resolved.", "PATH_NOT_FOUND");
+  }
+
+  let current = repositoryRoot;
+  const relativeParts = path.relative(repositoryRoot, target).split(path.sep).filter(Boolean);
+  for (const part of relativeParts) {
+    current = path.join(current, part);
+    let stats;
+    try {
+      stats = await fs.lstat(current);
+    } catch (error) {
+      if (error.code === "ENOENT") break;
+      throw new GitServiceError("The repository path could not be inspected.", "INVALID_PATH", error.message);
+    }
+
+    if (!stats.isSymbolicLink()) continue;
+    let realLink;
+    try {
+      realLink = await fs.realpath(current);
+    } catch (error) {
+      throw new GitServiceError("The repository path contains a broken symlink.", "PATH_NOT_FOUND", error.message);
+    }
+    if (!isPathInside(realRoot, realLink)) {
+      throw new GitServiceError("The requested path points outside the repository.", "PATH_OUTSIDE_REPOSITORY");
+    }
+  }
+
+  try {
+    const realTarget = await fs.realpath(target);
+    if (!isPathInside(realRoot, realTarget)) {
+      throw new GitServiceError("The requested path points outside the repository.", "PATH_OUTSIDE_REPOSITORY");
+    }
+  } catch (error) {
+    if (error instanceof GitServiceError) throw error;
+    if (error.code !== "ENOENT") {
+      throw new GitServiceError("The repository path could not be resolved.", "INVALID_PATH", error.message);
+    }
+  }
+}
+
+async function resolveRepositoryRelativePath(repositoryRoot, input) {
+  if (typeof repositoryRoot !== "string" || repositoryRoot.trim().length === 0) {
+    throw new GitServiceError("Repository root is required.", "INVALID_PATH");
+  }
+  const relative = assertRelativePath(input);
+  const root = path.resolve(repositoryRoot);
+  const target = path.resolve(root, ...relative.split("/"));
+  if (!isPathInside(root, target)) {
+    throw new GitServiceError("The requested path points outside the repository.", "PATH_OUTSIDE_REPOSITORY");
+  }
+  await verifySymlinkBoundary(root, target);
+  return target;
 }
 
 async function resolveCommit(cwd, refOrHash) {
@@ -172,6 +250,7 @@ module.exports = {
   assertCommitHash,
   assertRefName,
   assertRelativePath,
+  resolveRepositoryRelativePath,
   resolveCommit,
   validateDirectory,
   resolveRepository,

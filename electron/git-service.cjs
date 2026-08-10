@@ -7,6 +7,7 @@ const {
   assertCommitHash,
   assertRefName,
   assertRelativePath,
+  resolveRepositoryRelativePath,
   resolveCommit,
   resolveRepository,
 } = require("./git/core.cjs");
@@ -524,8 +525,11 @@ function truncateDiff(diffText) {
 async function getFileDiff(repositoryPath, options = {}) {
   const repository = await resolveRepository(repositoryPath);
   const cwd = repository.rootPath;
-  const filePath = assertRelativePath(options.path);
-  const pathspecs = options.oldPath ? [assertRelativePath(options.oldPath), filePath] : [filePath];
+  const filePath = await resolveRepositoryRelativePath(cwd, options.path);
+  const oldPath = options.oldPath ? await resolveRepositoryRelativePath(cwd, options.oldPath) : null;
+  const pathspecs = [oldPath, filePath]
+    .filter(Boolean)
+    .map((absolutePath) => path.relative(cwd, absolutePath).split(path.sep).join("/"));
 
   let args;
   if (options.type === "workspace") {
@@ -957,6 +961,7 @@ module.exports = {
   assertCommitHash,
   assertRefName,
   assertRelativePath,
+  resolveRepositoryRelativePath,
   parseBranches,
   parseCommits,
   parseWorktrees,
