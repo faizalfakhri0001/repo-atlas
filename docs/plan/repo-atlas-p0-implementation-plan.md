@@ -3138,15 +3138,15 @@ Existing behavior tetap bekerja tanpa regression.
 
 ## Stage 1 — Recent + Multi Repository
 
-- [ ] Repository session model.
-- [ ] Repository tabs.
-- [ ] Recent repository storage.
-- [ ] Startup recent screen.
-- [ ] Lazy session loading.
-- [ ] Workspace restore.
-- [ ] Missing repository recovery.
-- [ ] Dirty state tab indicator.
-- [ ] Multi-repository E2E.
+- [x] Repository session model.
+- [x] Repository tabs.
+- [x] Recent repository storage.
+- [x] Startup recent screen.
+- [x] Lazy session loading.
+- [x] Workspace restore.
+- [x] Missing repository recovery.
+- [x] Dirty state tab indicator.
+- [ ] Multi-repository E2E. (Dilewati sesuai instruksi pengguna.)
 
 ---
 
@@ -3631,13 +3631,13 @@ select commit
 
 ## Recent / Multi Repository
 
-- [ ] Recent list
-- [ ] Pin/unpin
-- [ ] Repository tabs
-- [ ] Lazy loading
-- [ ] Workspace restore
-- [ ] State per repository
-- [ ] Missing repository recovery
+- [x] Recent list
+- [x] Pin/unpin
+- [x] Repository tabs
+- [x] Lazy loading
+- [x] Workspace restore
+- [x] State per repository
+- [x] Missing repository recovery
 
 ## File Explorer
 
