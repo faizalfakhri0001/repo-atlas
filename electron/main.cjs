@@ -24,8 +24,25 @@ const {
   refreshRepositoryPartial,
   GitServiceError,
 } = require("./git-service.cjs");
+const { WatchManager } = require("./watch/watch-manager.cjs");
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
+const watchManager = new WatchManager({
+  onChange: (event) => {
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send("repository:changed", event);
+  },
+  onError: (error, sessionId) => {
+    const payload = {
+      sessionId,
+      message: error?.message ?? "Repository watcher failed.",
+      code: error?.code ?? "WATCH_ERROR",
+    };
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send("repository:watch-error", payload);
+  },
+  onStatus: (status) => {
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send("repository:watch-status", status);
+  },
+});
 
 function serializeError(error) {
   if (error instanceof GitServiceError) {
@@ -115,6 +132,10 @@ function registerIpcHandlers() {
     "repository:health": (payload) => repositoryHealth(payload?.repositoryPath, payload ?? {}),
     "branches:intelligence": (payload) => branchIntelligence(payload?.repositoryPath, payload ?? {}),
     "repository:refresh-partial": (payload) => refreshRepositoryPartial(payload?.repositoryPath, payload?.parts),
+    "repository:watch-start": (payload) => watchManager.start({ sessionId: payload?.sessionId, repositoryPath: payload?.repositoryPath, mode: payload?.mode }),
+    "repository:watch-stop": (payload) => watchManager.stop(payload?.sessionId),
+    "repository:watch-activity": (payload) => watchManager.setActivity(payload?.sessionId, payload?.active),
+    "repository:watch-status": (payload) => watchManager.getStatus(payload?.sessionId),
   };
 
   for (const [channel, task] of Object.entries(invokeHandlers)) {
@@ -148,4 +169,8 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("before-quit", () => {
+  void watchManager.stopAll();
 });

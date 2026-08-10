@@ -7,6 +7,11 @@ contextBridge.exposeInMainWorld("repoAtlas", {
   readRepositoryFile: (payload) => ipcRenderer.invoke("repository:file-content", payload),
   fileHistory: (payload) => ipcRenderer.invoke("file:history", payload),
   fileBlame: (payload) => ipcRenderer.invoke("file:blame", payload),
+  refreshRepositoryPartial: (payload) => ipcRenderer.invoke("repository:refresh-partial", payload),
+  startRepositoryWatch: (payload) => ipcRenderer.invoke("repository:watch-start", payload),
+  stopRepositoryWatch: (sessionId) => ipcRenderer.invoke("repository:watch-stop", { sessionId }),
+  setRepositoryWatchActivity: (payload) => ipcRenderer.invoke("repository:watch-activity", payload),
+  getRepositoryWatchStatus: (sessionId) => ipcRenderer.invoke("repository:watch-status", { sessionId }),
   readFileAtRevision: (payload) => ipcRenderer.invoke("file:content-at-revision", payload),
   revealRepositoryFile: (payload) => ipcRenderer.invoke("repository:reveal-file", payload),
   revealRepository: (repositoryPath) => ipcRenderer.invoke("repository:reveal", repositoryPath),
@@ -23,5 +28,23 @@ contextBridge.exposeInMainWorld("repoAtlas", {
   ownership: (payload) => ipcRenderer.invoke("analytics:ownership", payload),
   repositoryHealth: (payload) => ipcRenderer.invoke("repository:health", payload),
   branchIntelligence: (payload) => ipcRenderer.invoke("branches:intelligence", payload),
+  onRepositoryChanged: (listener) => {
+    if (typeof listener !== "function") return () => {};
+    const wrapped = (_event, payload) => listener(payload);
+    ipcRenderer.on("repository:changed", wrapped);
+    return () => ipcRenderer.removeListener("repository:changed", wrapped);
+  },
+  onRepositoryWatchStatus: (listener) => {
+    if (typeof listener !== "function") return () => {};
+    const wrapped = (_event, payload) => listener(payload);
+    ipcRenderer.on("repository:watch-status", wrapped);
+    return () => ipcRenderer.removeListener("repository:watch-status", wrapped);
+  },
+  onRepositoryWatchError: (listener) => {
+    if (typeof listener !== "function") return () => {};
+    const wrapped = (_event, payload) => listener(payload);
+    ipcRenderer.on("repository:watch-error", wrapped);
+    return () => ipcRenderer.removeListener("repository:watch-error", wrapped);
+  },
   platform: process.platform,
 });
