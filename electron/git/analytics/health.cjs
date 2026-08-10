@@ -273,6 +273,94 @@ function buildHealthSignals(input = {}, { now = Date.now() } = {}) {
   };
 }
 
+function compareSignals(left, right) {
+  return (
+    (SEVERITY_ORDER[left.severity] ?? 99) - (SEVERITY_ORDER[right.severity] ?? 99) ||
+    String(left.category).localeCompare(String(right.category)) ||
+    String(left.id).localeCompare(String(right.id))
+  );
+}
+
+function categoryStatus(signals) {
+  if (signals.some((entry) => entry.severity === "high")) return "warning";
+  if (signals.some((entry) => entry.severity === "medium" || entry.severity === "low")) return "attention";
+  return "healthy";
+}
+
+function healthGrade(score, signals) {
+  if (score < 70 || signals.some((entry) => entry.severity === "high")) return "warning";
+  if (score < 90 || signals.some((entry) => entry.severity === "medium")) return "attention";
+  return "healthy";
+}
+
+function buildHealthReport(input = {}, { now = Date.now(), limit = HEALTH_THRESHOLDS.maxSignals } = {}) {
+  const evaluated = buildHealthSignals(input, { now });
+  const allSignals = evaluated.signals.slice().sort(compareSignals);
+  const safeLimit = Math.min(HEALTH_THRESHOLDS.maxSignals, Math.max(1, Math.floor(Number(limit) || HEALTH_THRESHOLDS.maxSignals)));
+  const signals = allSignals.slice(0, safeLimit);
+  const penalty = allSignals.reduce((total, entry) => total + entry.penalty, 0);
+  const score = clamp(100 - penalty, 0, 100);
+  const categoryNames = ["workingTree", "branches", "repository", "activity", "ownership"];
+  const categories = Object.fromEntries(
+    categoryNames.map((category) => {
+      const categorySignals = allSignals.filter((entry) => entry.category === category);
+      const categoryPenalty = categorySignals.reduce((total, entry) => total + entry.penalty, 0);
+      return [
+        category,
+        {
+          score: clamp(100 - categoryPenalty, 0, 100),
+          penalty: categoryPenalty,
+          status: categoryStatus(categorySignals),
+          signalCount: categorySignals.length,
+          signalIds: categorySignals.map((entry) => entry.id),
+        },
+      ];
+    }),
+  );
+
+  const analyticsScope = input.analytics?.scope ?? {};
+  const branchScope = input.branches?.scope ?? {};
+  const trackedScope = input.trackedFiles ?? {};
+  const sourceTruncated = Boolean(analyticsScope.truncated || branchScope.truncated || trackedScope.truncated);
+  return {
+    score,
+    grade: healthGrade(score, allSignals),
+    generatedAt: new Date(timestampOf(now)).toISOString(),
+    signals,
+    categories,
+    facts: {
+      ...evaluated.facts,
+      dirtyFileCount: Array.isArray(input.status?.files) ? input.status.files.filter((file) => file?.kind !== "ignored").length : 0,
+      conflictedFileCount: Array.isArray(input.status?.files) ? input.status.files.filter((file) => file?.kind === "conflict").length : 0,
+      totalCommits: finiteNumber(input.analytics?.totals?.commits ?? input.analytics?.commits?.length),
+      processedCommits: finiteNumber(analyticsScope.processedCommits ?? input.analytics?.commits?.length),
+      analyticsTruncated: Boolean(analyticsScope.truncated),
+      trackedFilesInspected: trackedScope.files?.length ?? 0,
+    },
+    scope: {
+      analytics: {
+        maxCommits: analyticsScope.maxCommits ?? null,
+        processedCommits: analyticsScope.processedCommits ?? 0,
+        truncated: Boolean(analyticsScope.truncated),
+      },
+      branches: {
+        totalLocal: branchScope.totalLocal ?? 0,
+        analyzedLocal: branchScope.analyzedLocal ?? 0,
+        truncated: Boolean(branchScope.truncated),
+      },
+      trackedFiles: {
+        totalEntries: trackedScope.totalEntries ?? trackedScope.files?.length ?? 0,
+        inspectedEntries: trackedScope.files?.length ?? 0,
+        truncated: Boolean(trackedScope.truncated),
+      },
+      sourceTruncated,
+      truncated: Boolean(sourceTruncated || allSignals.length > signals.length),
+      returnedSignals: signals.length,
+      signalLimit: safeLimit,
+    },
+  };
+}
+
 module.exports = {
   DAY_IN_MILLISECONDS,
   HEALTH_THRESHOLDS,
@@ -287,4 +375,8 @@ module.exports = {
   activitySignals,
   ownershipSignals,
   buildHealthSignals,
+  compareSignals,
+  categoryStatus,
+  healthGrade,
+  buildHealthReport,
 };
