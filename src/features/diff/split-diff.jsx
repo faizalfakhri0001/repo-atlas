@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { alignSplitHunk } from "@/features/diff/split-aligner";
 import { SyntaxLine } from "@/features/diff/syntax-line";
 import { DiffMeta } from "@/features/diff/unified-diff";
+import { Button } from "@/components/ui/button";
 
 const LINE_STYLE = {
   add: "bg-emerald-500/10",
@@ -30,7 +31,7 @@ function SplitCell({ line, language, side, syntaxHighlight, wrap }) {
   );
 }
 
-export function SplitDiff({ meta = [], hunks = [], language = "text", syntaxHighlight = true, wrap = false }) {
+export function SplitDiff({ meta = [], hunks = [], language = "text", syntaxHighlight = true, wrap = false, hunkActionLabel = null, hunkActionDisabled = false, onHunkAction }) {
   return (
     <div role="table" aria-label="Split diff" className="min-w-[760px] font-mono text-[11.5px] leading-[19px]">
       <DiffMeta meta={meta} />
@@ -40,9 +41,20 @@ export function SplitDiff({ meta = [], hunks = [], language = "text", syntaxHigh
       </div>
       {hunks.map((hunk, hunkIndex) => (
         <div key={`${hunk.header}-${hunkIndex}`}>
-          <div className="sticky top-0 z-[1] border-y border-border/60 bg-sky-500/8 px-3 py-1 font-sans text-[11px] text-sky-500/90 backdrop-blur">
+          <div className="sticky top-0 z-[1] flex items-center gap-2 border-y border-border/60 bg-sky-500/8 px-3 py-1 font-sans text-[11px] text-sky-500/90 backdrop-blur">
             <span className="font-mono">{hunk.header}</span>
             {hunk.context && <span className="ml-2 text-muted-foreground">{hunk.context}</span>}
+            {hunkActionLabel && hunk.id && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto h-6 px-2 text-[10px]"
+                disabled={hunkActionDisabled}
+                onClick={() => onHunkAction?.(hunk.id)}
+              >
+                {hunkActionLabel}
+              </Button>
+            )}
           </div>
           {alignSplitHunk(hunk).map((row, rowIndex) => (
             <div role="row" key={`${hunk.header}-${rowIndex}`} className="grid grid-cols-2">

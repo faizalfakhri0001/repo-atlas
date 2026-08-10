@@ -1085,6 +1085,8 @@ export function createDemoApi() {
     setOperationMode: demoWriteError,
     stageFiles: demoWriteError,
     unstageFiles: demoWriteError,
+    stageHunk: demoWriteError,
+    unstageHunk: demoWriteError,
     scanRepository: () => ok(scanData()),
     analyticsSummary: (payload = {}) => ok(createDemoAnalyticsSummary(commits, mainTip, payload)),
     hotspots: (payload = {}) => ok(createDemoHotspotSummary(commits, mainTip, payload)),

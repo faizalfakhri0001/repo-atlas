@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { SyntaxLine } from "@/features/diff/syntax-line";
+import { Button } from "@/components/ui/button";
 
 const LINE_STYLE = {
   add: "bg-emerald-500/10",
@@ -37,7 +38,7 @@ function DiffLine({ line, language, syntaxHighlight, wrap }) {
   );
 }
 
-export function UnifiedDiff({ meta = [], hunks = [], language = "text", syntaxHighlight = true, wrap = false }) {
+export function UnifiedDiff({ meta = [], hunks = [], language = "text", syntaxHighlight = true, wrap = false, hunkActionLabel = null, hunkActionDisabled = false, onHunkAction }) {
   return (
     <div className="min-w-fit font-mono text-[11.5px] leading-[19px]">
       <DiffMeta meta={meta} />
@@ -46,6 +47,17 @@ export function UnifiedDiff({ meta = [], hunks = [], language = "text", syntaxHi
           <div className="sticky top-0 z-[1] flex items-center gap-2 border-y border-border/60 bg-sky-500/8 px-3 py-1 font-sans text-[11px] text-sky-500/90 backdrop-blur first:border-t-0">
             <span className="font-mono">{hunk.header}</span>
             {hunk.context && <span className="truncate text-muted-foreground">{hunk.context}</span>}
+            {hunkActionLabel && hunk.id && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto h-6 px-2 text-[10px]"
+                disabled={hunkActionDisabled}
+                onClick={() => onHunkAction?.(hunk.id)}
+              >
+                {hunkActionLabel}
+              </Button>
+            )}
           </div>
           {hunk.lines.map((line, lineIndex) => <DiffLine key={`${line.type}-${lineIndex}`} line={line} language={language} syntaxHighlight={syntaxHighlight} wrap={wrap} />)}
         </div>

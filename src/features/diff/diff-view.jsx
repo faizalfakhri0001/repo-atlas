@@ -13,11 +13,12 @@ import { UnifiedDiff } from "@/features/diff/unified-diff";
 const COLLAPSE_THRESHOLD = 900;
 const COLLAPSE_LINES = 500;
 
-export function DiffView({ repoPath, request, className, maxHeight }) {
+export function DiffView({ repoPath, request, className, maxHeight, revisionKey = null, onHunkAction, hunkActionDisabled = false }) {
   const [state, setState] = useState({ loading: true, error: null, data: null });
   const [showAll, setShowAll] = useState(false);
   const [preferences, setPreferences] = useState(() => loadDiffPreferences());
   const requestKey = JSON.stringify(request);
+  const loadKey = `${requestKey}:${revisionKey ?? ""}`;
 
   useEffect(() => {
     let cancelled = false;
@@ -36,17 +37,28 @@ export function DiffView({ repoPath, request, className, maxHeight }) {
     return () => {
       cancelled = true;
     };
-  }, [repoPath, requestKey]);
+  }, [repoPath, loadKey]);
 
   useEffect(() => {
     saveDiffPreferences(preferences);
   }, [preferences]);
 
-  const parsed = useMemo(() => parseUnifiedDiff(state.data?.diff ?? ""), [state.data?.diff]);
+  const parsed = useMemo(() => {
+    const parsedDiff = parseUnifiedDiff(state.data?.diff ?? "");
+    const descriptors = Array.isArray(state.data?.hunks) ? state.data.hunks : [];
+    if (descriptors.length === 0) return parsedDiff;
+    return {
+      ...parsedDiff,
+      hunks: parsedDiff.hunks.map((hunk, index) => ({ ...hunk, id: descriptors[index]?.id ?? null })),
+    };
+  }, [state.data?.diff, state.data?.hunks]);
   const totalLines = countDiffLines(parsed.hunks);
   const collapse = totalLines > COLLAPSE_THRESHOLD && !showAll;
   const visible = collapse ? limitDiffHunks(parsed.hunks, COLLAPSE_LINES) : { hunks: parsed.hunks, truncated: false };
   const language = languageForPath(request?.path);
+  const hunkAction = request?.staged ? "unstage" : "stage";
+  const hunkActionLabel = hunkAction === "unstage" ? "Unstage Hunk" : "Stage Hunk";
+  const hunkActionsEnabled = request?.type === "workspace" && !state.data?.truncated && typeof onHunkAction === "function";
 
   if (state.loading) {
     return <div className={cn("flex items-center justify-center gap-2 p-10 text-sm text-muted-foreground", className)}><LoaderCircle className="size-4 animate-spin" /> Loading diff…</div>;
@@ -78,9 +90,27 @@ export function DiffView({ repoPath, request, className, maxHeight }) {
         {visible.hunks.length === 0 ? (
           <div className="flex items-center justify-center p-10 text-sm text-muted-foreground">No textual changes in this file.</div>
         ) : preferences.mode === "split" ? (
-          <SplitDiff meta={parsed.meta} hunks={visible.hunks} language={language} syntaxHighlight={preferences.syntaxHighlight} wrap={preferences.wrap} />
+          <SplitDiff
+            meta={parsed.meta}
+            hunks={visible.hunks}
+            language={language}
+            syntaxHighlight={preferences.syntaxHighlight}
+            wrap={preferences.wrap}
+            hunkActionLabel={hunkActionsEnabled ? hunkActionLabel : null}
+            hunkActionDisabled={hunkActionDisabled}
+            onHunkAction={onHunkAction}
+          />
         ) : (
-          <UnifiedDiff meta={parsed.meta} hunks={visible.hunks} language={language} syntaxHighlight={preferences.syntaxHighlight} wrap={preferences.wrap} />
+          <UnifiedDiff
+            meta={parsed.meta}
+            hunks={visible.hunks}
+            language={language}
+            syntaxHighlight={preferences.syntaxHighlight}
+            wrap={preferences.wrap}
+            hunkActionLabel={hunkActionsEnabled ? hunkActionLabel : null}
+            hunkActionDisabled={hunkActionDisabled}
+            onHunkAction={onHunkAction}
+          />
         )}
         {collapse && visible.truncated && (
           <div className="flex items-center justify-center border-t border-border p-3 font-sans">

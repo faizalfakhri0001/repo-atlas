@@ -147,7 +147,11 @@ export function WorkspaceView({
     setOperationError(null);
     setOperationMessage(null);
     try {
-      const response = await onOperation?.(requestedAction === "unstage" ? "unstage" : "stage", paths);
+      if (typeof onOperation !== "function") {
+        setOperationError({ message: "Workspace operation is unavailable.", code: "OPERATION_UNAVAILABLE" });
+        return;
+      }
+      const response = await onOperation(requestedAction === "unstage" ? "unstage" : "stage", paths);
       if (response?.ok === false) {
         setOperationError(response.error ?? { message: "Workspace operation failed.", code: "OPERATION_FAILED" });
         return;
@@ -156,8 +160,42 @@ export function WorkspaceView({
       setOperationMessage(`${operationLabel} ${paths.length} file${paths.length === 1 ? "" : "s"}.`);
       setSelected(new Set());
       setAnchor(null);
+      setPreview((current) => (current ? { ...current, revision: Date.now() } : current));
     } catch (error) {
       setOperationError({ message: error?.message || "Workspace operation failed.", code: "OPERATION_FAILED" });
+    } finally {
+      setOperationBusy(false);
+    }
+  };
+
+  const runHunkOperation = async (hunkId) => {
+    if (!preview || !["staged", "unstaged"].includes(preview.mode) || !hunkId) return;
+    if (!safeWriteEnabled) {
+      setOperationError({ message: "Enable Safe Write before changing the Git index.", code: "READ_ONLY_MODE" });
+      return;
+    }
+    if (typeof onOperation !== "function") {
+      setOperationError({ message: "Workspace operation is unavailable.", code: "OPERATION_UNAVAILABLE" });
+      return;
+    }
+    setOperationBusy(true);
+    setOperationError(null);
+    setOperationMessage(null);
+    const operation = preview.mode === "staged" ? "unstage-hunk" : "stage-hunk";
+    try {
+      const response = await onOperation(operation, {
+        path: preview.item.path,
+        hunkId,
+        source: preview.mode === "staged" ? "staged" : "unstaged",
+      });
+      if (response?.ok === false) {
+        setOperationError(response.error ?? { message: "Hunk operation failed.", code: "OPERATION_FAILED" });
+        return;
+      }
+      setOperationMessage(preview.mode === "staged" ? "Unstaged hunk." : "Staged hunk.");
+      setPreview((current) => (current ? { ...current, revision: Date.now() } : current));
+    } catch (error) {
+      setOperationError({ message: error?.message || "Hunk operation failed.", code: "OPERATION_FAILED" });
     } finally {
       setOperationBusy(false);
     }
@@ -170,7 +208,7 @@ export function WorkspaceView({
   };
 
   const requestForPreview = (item, mode) => {
-    setPreview({ item, mode });
+    setPreview({ item, mode, revision: Date.now() });
     setOperationError(null);
   };
 
@@ -293,10 +331,16 @@ export function WorkspaceView({
                 <div className="sticky top-0 z-[2] flex items-center gap-2 border-b border-border bg-background/95 px-3 py-2 text-xs backdrop-blur">
                   <CircleDot className="size-3.5 text-muted-foreground" />
                   <FilePathLabel path={preview.item.path} className="min-w-0 flex-1" />
-                  <Badge variant="muted">{preview.mode === "staged" ? "staged vs HEAD" : preview.mode === "untracked" ? "new file" : "unstaged vs index"}</Badge>
+                  <Badge variant="muted">{preview.mode === "staged" ? "staged vs HEAD" : preview.mode === "untracked" ? "new file" : preview.mode === "conflict" ? "conflict resolution" : "unstaged vs index"}</Badge>
                   <CopyButton value={preview.item.path} title="Copy path" />
                 </div>
-                <DiffView repoPath={repoPath} request={preview.mode === "untracked" ? { type: "untracked", path: preview.item.path } : { type: "workspace", path: preview.item.path, staged: preview.mode === "staged" }} />
+                <DiffView
+                  repoPath={repoPath}
+                  request={preview.mode === "untracked" ? { type: "untracked", path: preview.item.path } : { type: "workspace", path: preview.item.path, staged: preview.mode === "staged" }}
+                  revisionKey={preview.revision}
+                  onHunkAction={preview.mode === "staged" || preview.mode === "unstaged" ? runHunkOperation : undefined}
+                  hunkActionDisabled={operationBusy || !safeWriteEnabled || isDemo}
+                />
               </>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

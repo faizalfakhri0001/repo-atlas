@@ -171,14 +171,31 @@ function App() {
   const runWorkspaceOperation = useCallback(
     async (sessionId, operation, paths) => {
       const session = state.sessions.find((candidate) => candidate.id === sessionId);
-      const method = operation === "unstage" ? api.unstageFiles : api.stageFiles;
+      const isHunkOperation = operation === "stage-hunk" || operation === "unstage-hunk";
+      const isUnstageOperation = operation === "unstage" || operation === "unstage-hunk";
+      const method = isHunkOperation
+        ? isUnstageOperation
+          ? api.unstageHunk
+          : api.stageHunk
+        : isUnstageOperation
+          ? api.unstageFiles
+          : api.stageFiles;
       if (!session?.path || typeof method !== "function") {
         const error = { message: "Workspace operation is unavailable.", code: "OPERATION_UNAVAILABLE" };
         actions.workspaceOperationFailed(sessionId, error);
         return { ok: false, error };
       }
       try {
-        const response = await method({ sessionId, repositoryPath: session.path, paths });
+        const request = isHunkOperation
+          ? {
+              sessionId,
+              repositoryPath: session.path,
+              path: paths?.path,
+              hunkId: paths?.hunkId,
+              source: paths?.source,
+            }
+          : { sessionId, repositoryPath: session.path, paths };
+        const response = await method(request);
         if (response?.ok === false) {
           actions.workspaceOperationFailed(sessionId, response.error ?? { message: "Workspace operation failed.", code: "OPERATION_FAILED" });
           return response;
