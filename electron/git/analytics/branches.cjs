@@ -238,15 +238,13 @@ async function branchIntelligence(repositoryPath, options = {}) {
   const remoteBranches = metadata.branches.filter((branch) => branch.remote);
   const analyzed = defaultCommit
       ? await mapWithConcurrency(localBranches, BRANCH_ANALYSIS_CONCURRENCY, async (branch) => {
-        const [countResult, mergeBaseResult, mergedResult] = await Promise.all([
-          runGit(
-            repository.rootPath,
-            ["rev-list", "--left-right", "--count", `${defaultCommit.hash}...${branch.hash}`, "--"],
-            { allowFailure: true },
-          ),
-          runGit(repository.rootPath, ["merge-base", defaultCommit.hash, branch.hash], { allowFailure: true }),
-          runGit(repository.rootPath, ["merge-base", "--is-ancestor", branch.hash, defaultCommit.hash], { allowFailure: true }),
-        ]);
+        const countResult = await runGit(
+          repository.rootPath,
+          ["rev-list", "--left-right", "--count", `${defaultCommit.hash}...${branch.hash}`, "--"],
+          { allowFailure: true },
+        );
+        const mergeBaseResult = await runGit(repository.rootPath, ["merge-base", defaultCommit.hash, branch.hash], { allowFailure: true });
+        const mergedResult = await runGit(repository.rootPath, ["merge-base", "--is-ancestor", branch.hash, defaultCommit.hash], { allowFailure: true });
         const counts = countResult.failed ? { ahead: 0, behind: 0 } : parseDivergenceCounts(countResult.stdout);
         return buildBranchRecord(branch, {
           defaultBranch: defaultBranchInfo.defaultBranch,
