@@ -27,15 +27,13 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Overview } from "@/components/overview";
-import { CommitGraph } from "@/components/commit-graph";
-import { BranchesView } from "@/components/branches-view";
-import { CompareView } from "@/components/compare-view";
-import { WorktreesView } from "@/components/worktrees-view";
-import { SubmodulesView } from "@/components/submodules-view";
-import { WorkspaceView } from "@/components/workspace-view";
-import { RefsView } from "@/components/refs-view";
+import { CommitGraph } from "@/features/commits";
+import { BranchesView } from "@/features/branches";
+import { CompareView } from "@/features/compare";
+import { WorktreesView, SubmodulesView, RefsView } from "@/features/metadata";
+import { WorkspaceView } from "@/features/workspace";
 import { CherryPickDialog } from "@/components/cherry-pick-dialog";
-import { StateBanner } from "@/components/state-banner";
+import { StateBanner } from "@/features/repository";
 import { cn, formatRelativeDate, truncateMiddle } from "@/lib/utils";
 
 const NAV_ITEMS = [
