@@ -16,9 +16,9 @@ function lineNumberWidth(lineCount) {
   return `${Math.max(2, String(lineCount).length)}ch`;
 }
 
-export function FilePreview({ repoPath, node, onOpenHistory, onOpenBlame }) {
+export function FilePreview({ repoPath, node, revision = null, onOpenHistory, onOpenBlame }) {
   const [state, setState] = useState({ loading: false, error: null, data: null });
-  const requestKey = useMemo(() => `${repoPath ?? ""}\u0000${node?.path ?? ""}`, [repoPath, node?.path]);
+  const requestKey = useMemo(() => `${repoPath ?? ""}\u0000${node?.path ?? ""}\u0000${revision ?? "HEAD"}`, [repoPath, node?.path, revision]);
 
   useEffect(() => {
     if (!node) {
@@ -28,8 +28,10 @@ export function FilePreview({ repoPath, node, onOpenHistory, onOpenBlame }) {
 
     let cancelled = false;
     setState({ loading: true, error: null, data: null });
-    api
-      .readRepositoryFile({ repositoryPath: repoPath, path: node.path })
+    const read = revision
+      ? api.readFileAtRevision({ repositoryPath: repoPath, hash: revision, path: node.path })
+      : api.readRepositoryFile({ repositoryPath: repoPath, path: node.path });
+    read
       .then((response) => {
         if (cancelled) return;
         if (!response?.ok) {
@@ -44,7 +46,7 @@ export function FilePreview({ repoPath, node, onOpenHistory, onOpenBlame }) {
     return () => {
       cancelled = true;
     };
-  }, [repoPath, requestKey, node]);
+  }, [repoPath, requestKey, node, revision]);
 
   if (!node) {
     return <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">Select a file to preview its contents.</div>;
@@ -66,7 +68,7 @@ export function FilePreview({ repoPath, node, onOpenHistory, onOpenBlame }) {
   if (state.data?.binary) {
     return (
       <div className="flex h-full flex-col">
-        <PreviewHeader node={node} data={state.data} onOpenHistory={onOpenHistory} onOpenBlame={onOpenBlame} />
+        <PreviewHeader node={node} data={state.data} revision={revision} onOpenHistory={onOpenHistory} onOpenBlame={onOpenBlame} />
         {state.data?.truncated && <PreviewLimitNotice size={state.data.size} />}
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center text-sm text-muted-foreground">
           <ScanLine className="size-6" />
@@ -81,7 +83,7 @@ export function FilePreview({ repoPath, node, onOpenHistory, onOpenBlame }) {
   const lines = String(state.data?.text ?? "").split("\n");
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PreviewHeader node={node} data={state.data} onOpenHistory={onOpenHistory} onOpenBlame={onOpenBlame} />
+      <PreviewHeader node={node} data={state.data} revision={revision} onOpenHistory={onOpenHistory} onOpenBlame={onOpenBlame} />
       {state.data?.truncated && <PreviewLimitNotice size={state.data.size} />}
       <div className="min-h-0 flex-1 overflow-auto bg-background/40">
         <pre className="min-w-fit font-mono text-[12px] leading-5">
@@ -113,12 +115,13 @@ function PreviewLimitNotice({ size }) {
   );
 }
 
-function PreviewHeader({ node, data, onOpenHistory, onOpenBlame }) {
+function PreviewHeader({ node, data, revision, onOpenHistory, onOpenBlame }) {
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
       <FilePathLabel path={node.path} className="min-w-0 flex-1 text-xs" />
       {node.status && <FileStatusBadge status={node.status} />}
       {data?.language && <Badge variant="muted">{data.language}</Badge>}
+      {revision && <Badge variant="info">At {revision.slice(0, 8)}</Badge>}
       {data?.size != null && <span className="shrink-0 text-[11px] text-muted-foreground">{formatBytes(data.size)}</span>}
       {onOpenHistory && <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={onOpenHistory}><HistoryIcon /> History</Button>}
       {onOpenBlame && <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={onOpenBlame}><GitBranch /> Blame</Button>}

@@ -55,6 +55,7 @@ export function FileExplorer({
   const [selectedPath, setSelectedPath] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
   const [fileMode, setFileMode] = useState("preview");
+  const [selectedRevision, setSelectedRevision] = useState(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [query, setQuery] = useState("");
   const filterRef = useRef(null);
@@ -88,6 +89,7 @@ export function FileExplorer({
     setSelectedPath(null);
     setSelectedNode(null);
     setFileMode("preview");
+    setSelectedRevision(null);
     setQuery("");
     api
       .listRepositoryFiles({ repositoryPath: repoPath })
@@ -146,6 +148,7 @@ export function FileExplorer({
     setSelectedNode(node);
     onHistoryStateChange?.(null);
     setFileMode("preview");
+    setSelectedRevision(null);
     onSelectFile?.(node);
   };
 
@@ -154,6 +157,7 @@ export function FileExplorer({
     setSelectedPath(node.path);
     setSelectedNode(node);
     setFileMode("history");
+    setSelectedRevision(null);
     onHistoryStateChange?.({ selectedPath: node.path, selectedHash: null, entries: [], hasMore: false, loaded: false, scrollTop: 0 });
   };
 
@@ -175,29 +179,34 @@ export function FileExplorer({
   useEffect(() => {
     if (!fileSelectionRequest?.path) return undefined;
     const requestedMode = fileSelectionRequest.mode ?? (fileSelectionRequest.openHistory ? "history" : "preview");
-    const requestKey = `${fileSelectionRequest.nonce ?? ""}:${fileSelectionRequest.path}:${requestedMode}`;
+    const requestedRevision = fileSelectionRequest.revision ?? null;
+    const requestKey = `${fileSelectionRequest.nonce ?? ""}:${fileSelectionRequest.path}:${requestedMode}:${requestedRevision ?? "HEAD"}`;
     if (handledSelectionRef.current === requestKey) return undefined;
     const nextNode = indexedFiles.find((file) => file.path === fileSelectionRequest.path);
-    if (!nextNode) return undefined;
+    const requestedNode = nextNode ?? (requestedRevision ? { path: fileSelectionRequest.path, name: fileSelectionRequest.path.split("/").at(-1), type: "file", tracked: false } : null);
+    if (!requestedNode) return undefined;
     handledSelectionRef.current = requestKey;
     setQuery("");
-    setSelectedPath(nextNode.path);
-    setSelectedNode(nextNode);
+    setSelectedPath(requestedNode.path);
+    setSelectedNode(requestedNode);
+    setSelectedRevision(requestedRevision);
     setFileMode(requestedMode);
     onHistoryStateChange?.(
         fileSelectionRequest.openHistory
-        ? { selectedPath: nextNode.path, selectedHash: null, entries: [], hasMore: false, loaded: false, scrollTop: 0 }
+        ? { selectedPath: requestedNode.path, selectedHash: null, entries: [], hasMore: false, loaded: false, scrollTop: 0 }
         : null,
     );
     setExpandedPaths((current) => {
       const next = new Set(current);
-      const parts = nextNode.path.split("/");
+      const parts = requestedNode.path.split("/");
       for (let index = 1; index < parts.length; index += 1) next.add(parts.slice(0, index).join("/"));
       return next;
     });
-    const timer = window.setTimeout(() => focusNode(nextNode), 0);
-    onSelectFile?.(nextNode);
-    return () => window.clearTimeout(timer);
+    const timer = nextNode ? window.setTimeout(() => focusNode(nextNode), 0) : null;
+    onSelectFile?.(requestedNode);
+    return () => {
+      if (timer) window.clearTimeout(timer);
+    };
   }, [fileSelectionRequest, indexedFiles, onHistoryStateChange, onSelectFile]);
 
   const handleTreeKeyDown = (event, node) => {
@@ -369,14 +378,20 @@ export function FileExplorer({
               <BlameView
                 repoPath={repoPath}
                 node={selectedNode}
-                revision={historyState?.selectedPath === selectedPath ? historyState.selectedHash : null}
+                revision={selectedRevision ?? (historyState?.selectedPath === selectedPath ? historyState.selectedHash : null)}
                 dirty={Boolean(selectedNode?.status)}
                 onOpenCommit={onOpenCommit}
                 onOpenFileAtRevision={onOpenFileAtRevision}
                 onOpenPreviousRevision={onOpenPreviousRevision}
               />
             ) : (
-              <FilePreview repoPath={repoPath} node={selectedNode} onOpenHistory={() => openHistory(selectedNode)} onOpenBlame={() => openBlame(selectedNode)} />
+              <FilePreview
+                repoPath={repoPath}
+                node={selectedNode}
+                revision={selectedRevision}
+                onOpenHistory={() => openHistory(selectedNode)}
+                onOpenBlame={() => openBlame(selectedNode)}
+              />
             )}
           </div>
         </main>

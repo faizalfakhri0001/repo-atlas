@@ -93,6 +93,8 @@ export function AppShell({
   onOpenFile,
   onFileHistoryChange,
   onOpenFileHistory,
+  onOpenFileAtRevision,
+  onOpenPreviousRevision,
   onClearCherryPick,
   onActivateRepository,
   onCloseRepository,
@@ -379,6 +381,8 @@ export function AppShell({
                     onShowWorkspace={onShowWorkspace}
                     onFileHistoryChange={(value) => onFileHistoryChange?.(loadedSession.id, value)}
                     onOpenFileHistory={(path) => onOpenFileHistory?.(loadedSession.id, path)}
+                    onOpenFileAtRevision={(revision, path) => onOpenFileAtRevision?.(revision, path, loadedSession.id)}
+                    onOpenPreviousRevision={(revision, path) => onOpenPreviousRevision?.(revision, path, loadedSession.id)}
                     onHealthNavigate={handleHealthNavigation}
                   />
                 </div>
@@ -446,6 +450,8 @@ function ViewHost({
   navigationRequest,
   onFileHistoryChange,
   onOpenFileHistory,
+  onOpenFileAtRevision,
+  onOpenPreviousRevision,
   onHealthNavigate,
 }) {
   // Commits and Compare stay mounted so their state (filters, selection,
@@ -489,6 +495,8 @@ function ViewHost({
           fileSelectionRequest={fileSelectionRequest}
           onHistoryStateChange={onFileHistoryChange}
           onOpenCommit={onFocusCommit}
+          onOpenFileAtRevision={onOpenFileAtRevision}
+          onOpenPreviousRevision={onOpenPreviousRevision}
         />
       )}
       {view === "hotspots" && <HotspotsView repoPath={data.repository.rootPath} onOpenFileHistory={onOpenFileHistory} initialFilter={navigationRequest?.view === "hotspots" ? navigationRequest.payload?.filter : null} />}

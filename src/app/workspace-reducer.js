@@ -353,6 +353,7 @@ export function workspaceReducer(state, action) {
             path: action.path,
             nonce: action.nonce ?? Date.now(),
             ...(action.openHistory ? { openHistory: true } : {}),
+            ...(action.revision ? { revision: action.revision } : {}),
           },
         },
       }));

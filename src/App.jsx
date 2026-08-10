@@ -145,6 +145,16 @@ function App() {
     [actions, activeSession, state.sessions],
   );
 
+  const openFileAtRevision = useCallback(
+    (revision, filePath, sessionId = null) => {
+      const targetSession = sessionId ? state.sessions.find((candidate) => candidate.id === sessionId) : activeSession;
+      if (!targetSession?.snapshot || !revision || !filePath) return;
+      actions.setActiveView("files", sessionId);
+      actions.requestFileSelection(filePath, Date.now(), false, sessionId, revision);
+    },
+    [actions, activeSession, state.sessions],
+  );
+
   const openRecentRepository = useCallback(
     (repositoryPath) => (repositoryPath ? loadRepository(repositoryPath) : handleOpen()),
     [handleOpen, loadRepository],
@@ -191,6 +201,8 @@ function App() {
       onQuickOpenFile={quickOpenFile}
       onOpenFile={openFile}
       onOpenFileHistory={openFileHistory}
+      onOpenFileAtRevision={openFileAtRevision}
+      onOpenPreviousRevision={openFileAtRevision}
       onFileHistoryChange={(sessionId, value) => actions.setFileHistory(value, sessionId)}
       onClearCherryPick={() => actions.setCherryPick(null)}
       onActivateRepository={activateRepository}
