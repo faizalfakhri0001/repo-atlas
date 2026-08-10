@@ -76,12 +76,10 @@ export function AppShell({
   onRemoveMissing,
 }) {
   const data = session?.snapshot ?? null;
-  const activeView = session?.activeView ?? "overview";
   const loading = session?.loading ?? false;
   const error = session?.error ?? null;
-  const graphRequest = session?.ui.graphRequest ?? null;
-  const compareInit = session?.ui.compareInit ?? null;
   const cherryPick = session?.ui.cherryPick ?? null;
+  const loadedSessions = sessions.filter((candidate) => candidate.snapshot);
 
   const counts = useMemo(
     () => ({
@@ -261,17 +259,24 @@ export function AppShell({
                 onReveal={onRevealRecent}
               />
             ) : (
-              <ViewHost
-                view={activeView}
-                data={data}
-                graphRequest={graphRequest}
-                compareInit={compareInit}
-                onCompare={onCompare}
-                onCherryPick={onCherryPick}
-                onShowBranchInGraph={onShowBranchInGraph}
-                onFocusCommit={onFocusCommit}
-                onShowWorkspace={onShowWorkspace}
-              />
+              loadedSessions.map((loadedSession) => (
+                <div
+                  key={loadedSession.id}
+                  className={cn("h-full", loadedSession.id !== activeSessionId && "hidden")}
+                >
+                  <ViewHost
+                    view={loadedSession.activeView}
+                    data={loadedSession.snapshot}
+                    graphRequest={loadedSession.ui.graphRequest}
+                    compareInit={loadedSession.ui.compareInit}
+                    onCompare={onCompare}
+                    onCherryPick={onCherryPick}
+                    onShowBranchInGraph={onShowBranchInGraph}
+                    onFocusCommit={onFocusCommit}
+                    onShowWorkspace={onShowWorkspace}
+                  />
+                </div>
+              ))
             )}
           </section>
 
