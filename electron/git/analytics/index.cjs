@@ -5,6 +5,7 @@ const { runGitStream } = require("./runner.cjs");
 const { createAnalyticsParser } = require("./parser.cjs");
 const { addAuthorAlias, normalizeAuthorIdentity } = require("./identity.cjs");
 const { AnalyticsCache, buildAnalyticsCacheKey } = require("./cache.cjs");
+const { linkCancellationSignal, throwIfCancelled } = require("./cancellation.cjs");
 const {
   MAX_ANALYTICS_OUTPUT_BYTES,
   analyticsReadLimit,
@@ -189,6 +190,7 @@ async function readRefsFingerprint(repositoryRoot) {
 }
 
 async function buildAnalyticsIndex(repositoryPath, options = {}) {
+  throwIfCancelled(options.signal);
   const repository = await resolveRepository(repositoryPath);
   const scope = normalizeAnalyticsScope(options);
   const parser = createAnalyticsParser();
@@ -196,6 +198,7 @@ async function buildAnalyticsIndex(repositoryPath, options = {}) {
     readRepositoryRevision(repository.rootPath),
     readRefsFingerprint(repository.rootPath),
   ]);
+  throwIfCancelled(options.signal);
   const args = [
     "log",
     "--all",
@@ -241,11 +244,15 @@ async function getAnalyticsIndex(repositoryPath, options = {}) {
 
   const active = activeBuilds.get(repository.rootPath);
   if (active) {
+    throwIfCancelled(options.signal);
     await active.promise.catch(() => {});
+    throwIfCancelled(options.signal);
     return getAnalyticsIndex(repositoryPath, options);
   }
 
-  const promise = buildAnalyticsIndex(repositoryPath, options)
+  const controller = new AbortController();
+  const unlink = linkCancellationSignal(options.signal, controller);
+  const promise = buildAnalyticsIndex(repositoryPath, { ...options, signal: controller.signal })
     .then((index) => {
       const indexKey = buildAnalyticsCacheKey({
         rootPath: index.repositoryKey,
@@ -258,10 +265,18 @@ async function getAnalyticsIndex(repositoryPath, options = {}) {
       return index;
     })
     .finally(() => {
+      unlink();
       if (activeBuilds.get(repository.rootPath)?.promise === promise) activeBuilds.delete(repository.rootPath);
     });
-  activeBuilds.set(repository.rootPath, { key, promise });
+  activeBuilds.set(repository.rootPath, { key, promise, controller });
   return promise;
+}
+
+function cancelAnalyticsBuild(repositoryPath) {
+  const active = activeBuilds.get(path.resolve(repositoryPath));
+  if (!active) return false;
+  active.controller.abort();
+  return true;
 }
 
 function invalidateAnalyticsCache(repositoryPath) {
@@ -276,6 +291,7 @@ function getAnalyticsCache() {
 module.exports = {
   ANALYTICS_FORMAT,
   buildAnalyticsIndex,
+  cancelAnalyticsBuild,
   createAnalyticsIndex,
   getAnalyticsCache,
   getAnalyticsIndex,

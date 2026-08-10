@@ -1,5 +1,6 @@
 const { spawn } = require("node:child_process");
 const { GitServiceError, humanizeGitError } = require("../core.cjs");
+const { cancellationError } = require("./cancellation.cjs");
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
@@ -24,10 +25,6 @@ function normalizeRunnerError(error, fallbackMessage = "Git analytics could not 
     );
   }
   return new GitServiceError(error?.message || fallbackMessage, "ANALYTICS_BUILD_FAILED", error?.stack || "");
-}
-
-function cancellationError() {
-  return new GitServiceError("Analytics build was cancelled.", "ANALYTICS_CANCELLED");
 }
 
 function runGitStream(cwd, args, options = {}) {
