@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const {
   aggregateDirectoryOwnership,
   aggregateFileOwnership,
+  calculateOwnershipMetrics,
   contributorKey,
   normalizeOwnershipPeriod,
 } = require("../electron/git/analytics/ownership.cjs");
@@ -57,4 +58,30 @@ test("aggregateDirectoryOwnership sums every file into each ancestor directory",
   assert.equal(directories.get("src").fileCount, 3);
   assert.equal(directories.get("").fileCount, 3);
   assert.equal(directories.get("src/components").contributors.size, 2);
+});
+
+test("calculateOwnershipMetrics exposes weighted shares and concentration labels", () => {
+  const metrics = calculateOwnershipMetrics({
+    path: "src/app.js",
+    type: "file",
+    totalCommits: 10,
+    totalChurn: 100,
+    contributors: new Map([
+      ["email:ada@example.test", { key: "email:ada@example.test", name: "Ada", email: "ada@example.test", commits: 8, churn: 20 }],
+      ["email:grace@example.test", { key: "email:grace@example.test", name: "Grace", email: "grace@example.test", commits: 2, churn: 80 }],
+    ]),
+  });
+
+  assert.equal(metrics.primaryContributor.name, "Grace");
+  assert.equal(metrics.primaryContributor.commitShare, 0.2);
+  assert.equal(metrics.primaryContributor.churnShare, 0.8);
+  assert.equal(metrics.primaryContributor.ownershipScore, 0.56);
+  assert.equal(metrics.top1Share, 0.56);
+  assert.equal(metrics.top2Share, 1);
+  assert.equal(metrics.concentration, 0.56);
+  assert.equal(metrics.concentrationLabel, "Distributed");
+
+  const single = calculateOwnershipMetrics({ totalCommits: 1, totalChurn: 0, contributors: new Map([["name:ada", { key: "name:ada", name: "Ada", commits: 1, churn: 0 }]]) });
+  assert.equal(single.primaryContributor.ownershipScore, 1);
+  assert.equal(single.concentrationLabel, "Highly concentrated");
 });

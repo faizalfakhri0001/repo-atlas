@@ -143,6 +143,49 @@ function aggregateDirectoryOwnership(files) {
   return directories;
 }
 
+function compareContributors(left, right) {
+  return right.ownershipScore - left.ownershipScore || right.churn - left.churn || right.commits - left.commits || left.name.localeCompare(right.name);
+}
+
+function concentrationLabel(top1Share) {
+  if (top1Share >= 0.8) return "Highly concentrated";
+  if (top1Share >= 0.6) return "Moderately concentrated";
+  return "Distributed";
+}
+
+function calculateOwnershipMetrics(node) {
+  const totalCommits = finiteNumber(node.totalCommits);
+  const totalChurn = finiteNumber(node.totalChurn);
+  const contributors = mapValues(node.contributors).map((contributor) => {
+    const commits = finiteNumber(contributor.commits);
+    const churn = finiteNumber(contributor.churn, finiteNumber(contributor.additions) + finiteNumber(contributor.deletions));
+    const commitShare = totalCommits > 0 ? commits / totalCommits : 0;
+    const churnShare = totalChurn > 0 ? churn / totalChurn : 0;
+    const ownershipScore = totalChurn > 0 ? 0.4 * commitShare + 0.6 * churnShare : commitShare;
+    return {
+      ...contributor,
+      aliases: contributor.aliases instanceof Set ? [...contributor.aliases] : contributor.aliases ?? [],
+      commits,
+      churn,
+      commitShare,
+      churnShare,
+      ownershipScore,
+    };
+  }).sort(compareContributors);
+  const top1Share = contributors[0]?.ownershipScore ?? 0;
+  const top2Share = contributors.slice(0, 2).reduce((sum, contributor) => sum + contributor.ownershipScore, 0);
+  return {
+    ...node,
+    contributors,
+    primaryContributor: contributors[0] ?? null,
+    topContributors: contributors.slice(0, 10),
+    top1Share,
+    top2Share,
+    concentration: top1Share,
+    concentrationLabel: concentrationLabel(top1Share),
+  };
+}
+
 /**
  * Aggregate all-time file ownership from the shared analytics index. The
  * function only uses historical index data and never reads the working tree.
@@ -164,6 +207,9 @@ module.exports = {
   OWNERSHIP_PERIODS,
   aggregateFileOwnership,
   aggregateDirectoryOwnership,
+  calculateOwnershipMetrics,
+  concentrationLabel,
+  compareContributors,
   contributorKey,
   createDirectoryOwnership,
   createContributor,
