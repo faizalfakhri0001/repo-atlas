@@ -63,6 +63,7 @@ export function useWorkspaceStore({ storage = null } = {}) {
       setGraphRequest: (request) => dispatch({ type: "session/set-graph-request", request }),
       setCompareInit: (initial) => dispatch({ type: "session/set-compare-init", initial }),
       setCherryPick: (value) => dispatch({ type: "session/set-cherry-pick", value }),
+      setFileHistory: (value, sessionId = null) => dispatch({ type: "session/set-file-history", value, sessionId }),
     }),
     [],
   );

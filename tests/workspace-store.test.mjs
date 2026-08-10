@@ -39,6 +39,17 @@ test("workspace reducer keeps repository data and view state inside a session", 
   assert.equal(session.loading, false);
   assert.equal(session.activeView, "compare");
   assert.deepEqual(session.ui.compareInit, { base: "main", head: "feature/demo", nonce: 3 });
+
+  state = workspaceReducer(state, {
+    type: "session/set-file-history",
+    value: { selectedPath: "src/app.js", selectedHash: "abc123", entries: [], scrollTop: 0 },
+  });
+  assert.deepEqual(state.sessions[0].ui.fileHistory, {
+    selectedPath: "src/app.js",
+    selectedHash: "abc123",
+    entries: [],
+    scrollTop: 0,
+  });
 });
 
 test("new sessions start with isolated navigation state", () => {
@@ -46,7 +57,7 @@ test("new sessions start with isolated navigation state", () => {
   assert.equal(session.id, "c:\\work\\repo");
   assert.equal(session.name, "repo");
   assert.equal(session.activeView, "overview");
-  assert.deepEqual(session.ui, { graphRequest: null, compareInit: null, cherryPick: null });
+  assert.deepEqual(session.ui, { graphRequest: null, compareInit: null, cherryPick: null, fileHistory: null });
   assert.equal(session.lastActivatedAt, 10);
 });
 

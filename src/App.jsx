@@ -151,6 +151,7 @@ function App() {
       onShowBranchInGraph={showBranchInGraph}
       onFocusCommit={focusCommitInGraph}
       onShowWorkspace={showWorkspace}
+      onFileHistoryChange={(sessionId, value) => actions.setFileHistory(value, sessionId)}
       onClearCherryPick={() => actions.setCherryPick(null)}
       onActivateRepository={activateRepository}
       onCloseRepository={actions.closeRepository}

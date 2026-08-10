@@ -67,6 +67,7 @@ export function AppShell({
   onShowBranchInGraph,
   onFocusCommit,
   onShowWorkspace,
+  onFileHistoryChange,
   onClearCherryPick,
   onActivateRepository,
   onCloseRepository,
@@ -277,11 +278,13 @@ export function AppShell({
                     data={loadedSession.snapshot}
                     graphRequest={loadedSession.ui.graphRequest}
                     compareInit={loadedSession.ui.compareInit}
+                    fileHistory={loadedSession.ui.fileHistory}
                     onCompare={onCompare}
                     onCherryPick={onCherryPick}
                     onShowBranchInGraph={onShowBranchInGraph}
                     onFocusCommit={onFocusCommit}
                     onShowWorkspace={onShowWorkspace}
+                    onFileHistoryChange={(value) => onFileHistoryChange?.(loadedSession.id, value)}
                   />
                 </div>
               ))
@@ -321,6 +324,8 @@ function ViewHost({
   onShowBranchInGraph,
   onFocusCommit,
   onShowWorkspace,
+  fileHistory,
+  onFileHistoryChange,
 }) {
   // Commits and Compare stay mounted so their state (filters, selection,
   // loaded pages) survives navigation.
@@ -350,7 +355,14 @@ function ViewHost({
       {view === "worktrees" && <WorktreesView worktrees={data.worktrees} />}
       {view === "submodules" && <SubmodulesView submodules={data.submodules} />}
       {view === "workspace" && <WorkspaceView status={data.status} repoPath={data.repository.rootPath} />}
-      {view === "files" && <FileExplorer repoPath={data.repository.rootPath} status={data.status} />}
+      {view === "files" && (
+        <FileExplorer
+          repoPath={data.repository.rootPath}
+          status={data.status}
+          historyState={fileHistory}
+          onHistoryStateChange={onFileHistoryChange}
+        />
+      )}
       {view === "refs" && <RefsView data={data} />}
     </>
   );

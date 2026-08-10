@@ -39,6 +39,7 @@ export function createRepositorySession(repositoryPath, lastActivatedAt = Date.n
       graphRequest: null,
       compareInit: null,
       cherryPick: null,
+      fileHistory: null,
     },
     lastActivatedAt,
   };
@@ -300,6 +301,15 @@ export function workspaceReducer(state, action) {
       return updateSession(state, sessionId, (session) => ({
         ...session,
         ui: { ...session.ui, cherryPick: action.value },
+      }));
+    }
+
+    case "session/set-file-history": {
+      const sessionId = action.sessionId ?? state.activeSessionId;
+      if (!sessionId) return state;
+      return updateSession(state, sessionId, (session) => ({
+        ...session,
+        ui: { ...session.ui, fileHistory: action.value },
       }));
     }
 
