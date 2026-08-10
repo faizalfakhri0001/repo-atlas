@@ -234,18 +234,22 @@ async function branchIntelligence(repositoryPath, options = {}) {
   const localRefs = new Set(localBranches.map((branch) => branch.ref));
   const remoteBranches = metadata.branches.filter((branch) => branch.remote);
   const analyzed = defaultCommit
-    ? await mapWithConcurrency(localBranches, BRANCH_ANALYSIS_CONCURRENCY, async (branch) => {
-        const countResult = await runGit(
-          repository.rootPath,
-          ["rev-list", "--left-right", "--count", `${defaultCommit.hash}...${branch.hash}`, "--"],
-          { allowFailure: true },
-        );
+      ? await mapWithConcurrency(localBranches, BRANCH_ANALYSIS_CONCURRENCY, async (branch) => {
+        const [countResult, mergeBaseResult] = await Promise.all([
+          runGit(
+            repository.rootPath,
+            ["rev-list", "--left-right", "--count", `${defaultCommit.hash}...${branch.hash}`, "--"],
+            { allowFailure: true },
+          ),
+          runGit(repository.rootPath, ["merge-base", defaultCommit.hash, branch.hash], { allowFailure: true }),
+        ]);
         const counts = countResult.failed ? { ahead: 0, behind: 0 } : parseDivergenceCounts(countResult.stdout);
         return buildBranchRecord(branch, {
           defaultBranch: defaultBranchInfo.defaultBranch,
           currentBranch: metadata.currentBranch,
           aheadOfDefault: counts.ahead,
           behindDefault: counts.behind,
+          mergeBase: mergeBaseResult.failed ? null : mergeBaseResult.stdout.trim() || null,
           analyzed: true,
           now,
         });

@@ -48,4 +48,5 @@ test("branch intelligence reports ahead and behind counts against the current de
     { ahead: behind.aheadOfDefault, behind: behind.behindDefault },
     { ahead: 0, behind: 1 },
   );
+  assert.equal(ahead.mergeBase, await git("rev-parse", "main").then((result) => result.stdout.trim().slice(0, 40)));
 });
