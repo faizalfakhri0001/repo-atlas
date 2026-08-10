@@ -154,4 +154,24 @@ describe("FileExplorer", () => {
     expect(await screen.findByText("Add app")).toBeInTheDocument();
     expect(fileHistory).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository", path: "src/app.js", limit: 200, skip: 0 });
   });
+
+  it("opens a file requested by repository search", async () => {
+    listRepositoryFiles.mockResolvedValueOnce({
+      ok: true,
+      data: [{ path: "src/auth/login.js", name: "login.js", extension: "js", tracked: true }],
+    });
+    readRepositoryFile.mockResolvedValueOnce({
+      ok: true,
+      data: { path: "src/auth/login.js", text: "export const login = true;\n", binary: false, truncated: false, size: 28, language: "JavaScript" },
+    });
+    render(
+      <FileExplorer
+        repoPath="/workspace/repository"
+        fileSelectionRequest={{ path: "src/auth/login.js", nonce: 9 }}
+      />,
+    );
+
+    expect(await screen.findByText("export const login = true;")).toBeInTheDocument();
+    expect(readRepositoryFile).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository", path: "src/auth/login.js" });
+  });
 });

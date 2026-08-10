@@ -36,7 +36,15 @@ import {
 const ROW_HEIGHT = 28;
 const OVERSCAN = 8;
 
-export function FileExplorer({ repoPath, status, onSelectFile, historyState, onHistoryStateChange, focusFilterRequest = null }) {
+export function FileExplorer({
+  repoPath,
+  status,
+  onSelectFile,
+  historyState,
+  onHistoryStateChange,
+  focusFilterRequest = null,
+  fileSelectionRequest = null,
+}) {
   const [state, setState] = useState({ loading: true, error: null, files: [] });
   const [expandedPaths, setExpandedPaths] = useState(() => new Set());
   const [selectedPath, setSelectedPath] = useState(null);
@@ -45,6 +53,7 @@ export function FileExplorer({ repoPath, status, onSelectFile, historyState, onH
   const [query, setQuery] = useState("");
   const filterRef = useRef(null);
   const rowRefs = useRef(new Map());
+  const handledSelectionRef = useRef(null);
 
   useEffect(() => {
     const handleQuickFileShortcut = (event) => {
@@ -146,6 +155,28 @@ export function FileExplorer({ repoPath, status, onSelectFile, historyState, onH
     element.focus();
     if (typeof element.scrollIntoView === "function") element.scrollIntoView({ block: "nearest" });
   };
+
+  useEffect(() => {
+    if (!fileSelectionRequest?.path) return undefined;
+    const requestKey = `${fileSelectionRequest.nonce ?? ""}:${fileSelectionRequest.path}`;
+    if (handledSelectionRef.current === requestKey) return undefined;
+    const nextNode = indexedFiles.find((file) => file.path === fileSelectionRequest.path);
+    if (!nextNode) return undefined;
+    handledSelectionRef.current = requestKey;
+    setQuery("");
+    setSelectedPath(nextNode.path);
+    setSelectedNode(nextNode);
+    onHistoryStateChange?.(null);
+    setExpandedPaths((current) => {
+      const next = new Set(current);
+      const parts = nextNode.path.split("/");
+      for (let index = 1; index < parts.length; index += 1) next.add(parts.slice(0, index).join("/"));
+      return next;
+    });
+    const timer = window.setTimeout(() => focusNode(nextNode), 0);
+    onSelectFile?.(nextNode);
+    return () => window.clearTimeout(timer);
+  }, [fileSelectionRequest, indexedFiles, onHistoryStateChange, onSelectFile]);
 
   const handleTreeKeyDown = (event, node) => {
     const currentIndex = visibleRows.findIndex(({ node: candidate }) => candidate.id === node.id);

@@ -223,6 +223,7 @@ export function CommitGraph({ data, onCompare, onCherryPick, onShowWorkspace, gr
       setRefFilter(graphRequest.refs);
       fetchList({ refs: graphRequest.refs });
     }
+    if (graphRequest.query !== undefined) setQuery(graphRequest.query ?? "");
     if (graphRequest.focusHash) setPendingFocus(graphRequest.focusHash);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphRequest]);

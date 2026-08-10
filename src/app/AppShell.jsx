@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Archive,
   Boxes,
@@ -37,6 +37,7 @@ import { CompareView } from "@/features/compare";
 import { WorktreesView, SubmodulesView, RefsView } from "@/features/metadata";
 import { WorkspaceView } from "@/features/workspace";
 import { FileExplorer } from "@/features/files";
+import { GlobalSearch } from "@/features/search";
 import { CherryPickDialog } from "@/components/cherry-pick-dialog";
 import { StateBanner } from "@/features/repository";
 import {
@@ -45,6 +46,7 @@ import {
   createFileCommands,
   createNavigationCommands,
   createRepositoryCommands,
+  createSearchCommands,
   useCommandPalette,
   useCommandPaletteShortcuts,
 } from "@/features/command-palette";
@@ -75,8 +77,10 @@ export function AppShell({
   onCherryPick,
   onShowBranchInGraph,
   onFocusCommit,
+  onFocusAuthor,
   onShowWorkspace,
   onQuickOpenFile,
+  onOpenFile,
   onFileHistoryChange,
   onClearCherryPick,
   onActivateRepository,
@@ -97,6 +101,22 @@ export function AppShell({
   const selectedSessionId = activeSessionId ?? session?.id;
   const workspaceSessions = useMemo(() => (sessions.length > 0 ? sessions : session ? [session] : []), [session, sessions]);
   const loadedSessions = workspaceSessions.filter((candidate) => candidate.snapshot);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+
+  const openGlobalSearch = useCallback(() => {
+    if (data) setGlobalSearchOpen(true);
+  }, [data]);
+
+  const openSearchResult = useCallback(
+    (result) => {
+      if (!result) return;
+      if (result.type === "file") onOpenFile?.(result.path);
+      else if (result.type === "commit" || result.type === "tag") onFocusCommit?.(result.hash);
+      else if (result.type === "branch") onShowBranchInGraph?.(result.name);
+      else if (result.type === "author") onFocusAuthor?.(result.name);
+    },
+    [onFocusAuthor, onFocusCommit, onOpenFile, onShowBranchInGraph],
+  );
 
   const commandContext = useMemo(
     () => ({
@@ -114,14 +134,16 @@ export function AppShell({
       switchRepository: onActivateRepository,
       openRecentRepository: onOpenRecent,
       quickOpenFile: onQuickOpenFile,
+      openGlobalSearch,
     }),
-    [activeView, data?.repository, isDemo, onActivateRepository, onCloseRepository, onNavigate, onOpen, onOpenRecent, onQuickOpenFile, onRefresh, recentRepositories, session, workspaceSessions],
+    [activeView, data?.repository, isDemo, onActivateRepository, onCloseRepository, onNavigate, onOpen, onOpenRecent, onQuickOpenFile, onRefresh, openGlobalSearch, recentRepositories, session, workspaceSessions],
   );
   const commandList = useMemo(
     () => createCommandRegistry([
       ...createNavigationCommands(),
       ...createRepositoryCommands(commandContext),
       ...createFileCommands(),
+      ...createSearchCommands(),
     ]),
     [commandContext],
   );
@@ -131,7 +153,7 @@ export function AppShell({
     context: commandContext,
     onOpenPalette: palette.openPalette,
     onExecute: palette.executeCommand,
-    open: palette.open,
+    open: palette.open || globalSearchOpen,
   });
 
   const counts = useMemo(
@@ -327,6 +349,7 @@ export function AppShell({
                     compareInit={loadedSession.ui.compareInit}
                     fileHistory={loadedSession.ui.fileHistory}
                     fileFilterRequest={loadedSession.ui.fileFilterRequest}
+                    fileSelectionRequest={loadedSession.ui.fileSelectionRequest}
                     onCompare={onCompare}
                     onCherryPick={onCherryPick}
                     onShowBranchInGraph={onShowBranchInGraph}
@@ -371,6 +394,13 @@ export function AppShell({
         executingId={palette.executingId}
         error={palette.error}
       />
+      <GlobalSearch
+        open={globalSearchOpen}
+        onOpenChange={setGlobalSearchOpen}
+        repositoryPath={data?.repository.rootPath}
+        revision={data ? { head: data.repository.head, scannedAt: data.scannedAt } : null}
+        onOpenResult={openSearchResult}
+      />
     </TooltipProvider>
   );
 }
@@ -387,6 +417,7 @@ function ViewHost({
   onShowWorkspace,
   fileHistory,
   fileFilterRequest,
+  fileSelectionRequest,
   onFileHistoryChange,
 }) {
   // Commits and Compare stay mounted so their state (filters, selection,
@@ -423,6 +454,7 @@ function ViewHost({
           status={data.status}
           historyState={fileHistory}
           focusFilterRequest={fileFilterRequest}
+          fileSelectionRequest={fileSelectionRequest}
           onHistoryStateChange={onFileHistoryChange}
         />
       )}

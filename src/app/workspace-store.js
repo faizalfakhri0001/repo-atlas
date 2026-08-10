@@ -65,6 +65,7 @@ export function useWorkspaceStore({ storage = null } = {}) {
       setCherryPick: (value) => dispatch({ type: "session/set-cherry-pick", value }),
       setFileHistory: (value, sessionId = null) => dispatch({ type: "session/set-file-history", value, sessionId }),
       requestFileFilter: (nonce = Date.now()) => dispatch({ type: "session/request-file-filter", nonce }),
+      requestFileSelection: (path, nonce = Date.now()) => dispatch({ type: "session/request-file-selection", path, nonce }),
     }),
     [],
   );

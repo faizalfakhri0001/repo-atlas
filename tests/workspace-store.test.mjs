@@ -59,7 +59,14 @@ test("new sessions start with isolated navigation state", () => {
   assert.equal(session.id, "c:\\work\\repo");
   assert.equal(session.name, "repo");
   assert.equal(session.activeView, "overview");
-  assert.deepEqual(session.ui, { graphRequest: null, compareInit: null, cherryPick: null, fileHistory: null, fileFilterRequest: null });
+  assert.deepEqual(session.ui, {
+    graphRequest: null,
+    compareInit: null,
+    cherryPick: null,
+    fileHistory: null,
+    fileFilterRequest: null,
+    fileSelectionRequest: null,
+  });
   assert.equal(session.lastActivatedAt, 10);
 });
 

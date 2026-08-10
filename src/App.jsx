@@ -109,6 +109,14 @@ function App() {
     [actions],
   );
 
+  const focusAuthorInGraph = useCallback(
+    (author) => {
+      actions.setGraphRequest({ query: author, nonce: Date.now() });
+      actions.setActiveView("commits");
+    },
+    [actions],
+  );
+
   const showWorkspace = useCallback(() => actions.setActiveView("workspace"), [actions]);
 
   const quickOpenFile = useCallback(() => {
@@ -117,6 +125,15 @@ function App() {
     actions.setActiveView("files");
     actions.requestFileFilter(quickFileRequest.current);
   }, [actions, activeSession?.snapshot]);
+
+  const openFile = useCallback(
+    (filePath) => {
+      if (!activeSession?.snapshot || !filePath) return;
+      actions.setActiveView("files");
+      actions.requestFileSelection(filePath, Date.now());
+    },
+    [actions, activeSession?.snapshot],
+  );
 
   const openRecentRepository = useCallback(
     (repositoryPath) => (repositoryPath ? loadRepository(repositoryPath) : handleOpen()),
@@ -158,8 +175,10 @@ function App() {
       onCherryPick={openCherryPick}
       onShowBranchInGraph={showBranchInGraph}
       onFocusCommit={focusCommitInGraph}
+      onFocusAuthor={focusAuthorInGraph}
       onShowWorkspace={showWorkspace}
       onQuickOpenFile={quickOpenFile}
+      onOpenFile={openFile}
       onFileHistoryChange={(sessionId, value) => actions.setFileHistory(value, sessionId)}
       onClearCherryPick={() => actions.setCherryPick(null)}
       onActivateRepository={activateRepository}

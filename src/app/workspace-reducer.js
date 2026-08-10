@@ -41,6 +41,7 @@ export function createRepositorySession(repositoryPath, lastActivatedAt = Date.n
       cherryPick: null,
       fileHistory: null,
       fileFilterRequest: null,
+      fileSelectionRequest: null,
     },
     lastActivatedAt,
   };
@@ -320,6 +321,18 @@ export function workspaceReducer(state, action) {
       return updateSession(state, sessionId, (session) => ({
         ...session,
         ui: { ...session.ui, fileFilterRequest: action.nonce ?? Date.now() },
+      }));
+    }
+
+    case "session/request-file-selection": {
+      const sessionId = action.sessionId ?? state.activeSessionId;
+      if (!sessionId || !action.path) return state;
+      return updateSession(state, sessionId, (session) => ({
+        ...session,
+        ui: {
+          ...session.ui,
+          fileSelectionRequest: { path: action.path, nonce: action.nonce ?? Date.now() },
+        },
       }));
     }
 
