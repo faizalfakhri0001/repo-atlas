@@ -3183,16 +3183,17 @@ Existing behavior tetap bekerja tanpa regression.
 
 ## Stage 4 — Diff Upgrade
 
-- [ ] Extract parser.
-- [ ] normalized diff model.
-- [ ] split aligner.
-- [ ] UnifiedDiff component.
-- [ ] SplitDiff component.
-- [ ] diff toolbar.
-- [ ] syntax highlighter.
-- [ ] language mapping.
-- [ ] preferences persistence.
-- [ ] performance tests.
+- [x] Extract parser.
+- [x] normalized diff model.
+- [x] split aligner.
+- [x] UnifiedDiff component.
+- [x] SplitDiff component.
+- [x] diff toolbar.
+- [x] syntax highlighter.
+- [x] language mapping.
+- [x] preferences persistence.
+- [x] performance tests.
+- [ ] Diff Viewer E2E. (Dilewati sesuai instruksi pengguna.)
 
 ---
 
@@ -3664,13 +3665,13 @@ select commit
 
 ## Diff
 
-- [ ] Parser extraction
-- [ ] Unified renderer
-- [ ] Split renderer
-- [ ] Syntax highlighting
-- [ ] Language mapping
-- [ ] Preferences
-- [ ] Large diff protection
+- [x] Parser extraction
+- [x] Unified renderer
+- [x] Split renderer
+- [x] Syntax highlighting
+- [x] Language mapping
+- [x] Preferences
+- [x] Large diff protection
 
 ## Global Search
 
