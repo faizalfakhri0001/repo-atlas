@@ -13,6 +13,10 @@ function calculateChurn(additions, deletions) {
   return finiteNumber(additions) + finiteNumber(deletions);
 }
 
+function calculateCommitFrequency(file) {
+  return finiteNumber(file?.commitCount ?? file?.commits);
+}
+
 function mapValues(value) {
   if (value instanceof Map) return [...value.values()];
   return Array.isArray(value) ? value : [];
@@ -30,12 +34,13 @@ function collectFileActivity(index) {
     .map((file) => {
       const additions = finiteNumber(file.additions);
       const deletions = finiteNumber(file.deletions);
-      const commitCount = finiteNumber(file.commits);
+      const commitCount = calculateCommitFrequency(file);
       const authors = mapValues(file.authors).map((author) => ({ ...author }));
       return {
         path: typeof file.path === "string" ? file.path : "",
         commitCount,
         commits: commitCount,
+        commitFrequency: commitCount,
         additions,
         deletions,
         churn: calculateChurn(additions, deletions),
@@ -70,6 +75,7 @@ module.exports = {
   RECENCY_WINDOW_DAYS,
   collectFileActivity,
   calculateChurn,
+  calculateCommitFrequency,
   normalizeHotspotLimit,
   normalizePathPrefix,
   pathMatchesPrefix,

@@ -1,11 +1,17 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { calculateChurn, collectFileActivity } = require("../electron/git/analytics/hotspots.cjs");
+const { calculateChurn, calculateCommitFrequency, collectFileActivity } = require("../electron/git/analytics/hotspots.cjs");
 
 test("calculateChurn is the sum of line additions and deletions", () => {
   assert.equal(calculateChurn(14, 6), 20);
   assert.equal(calculateChurn("4", "3"), 7);
   assert.equal(calculateChurn(undefined, 3), 3);
+});
+
+test("calculateCommitFrequency counts commits touching a file", () => {
+  assert.equal(calculateCommitFrequency({ commits: 8 }), 8);
+  assert.equal(calculateCommitFrequency({ commitCount: 5, commits: 8 }), 5);
+  assert.equal(calculateCommitFrequency({}), 0);
 });
 
 test("collectFileActivity normalizes file metrics from the shared analytics index", () => {
@@ -33,6 +39,7 @@ test("collectFileActivity normalizes file metrics from the shared analytics inde
       path: "src/app.js",
       commitCount: 3,
       commits: 3,
+      commitFrequency: 3,
       additions: 12,
       deletions: 4,
       churn: 16,
@@ -45,6 +52,7 @@ test("collectFileActivity normalizes file metrics from the shared analytics inde
       path: "deleted.js",
       commitCount: 1,
       commits: 1,
+      commitFrequency: 1,
       additions: 1,
       deletions: 0,
       churn: 1,
