@@ -37,6 +37,7 @@ function runGitStream(cwd, args, options = {}) {
     ? Math.max(1, Number(options.maxOutputBytes))
     : DEFAULT_MAX_OUTPUT_BYTES;
   const signal = options.signal;
+  const spawnProcess = typeof options.spawnFn === "function" ? options.spawnFn : spawn;
 
   if (signal?.aborted) return Promise.reject(cancellationError());
 
@@ -82,7 +83,7 @@ function runGitStream(cwd, args, options = {}) {
     };
 
     try {
-      child = spawn("git", args, {
+      child = spawnProcess("git", args, {
         cwd,
         shell: false,
         windowsHide: true,
@@ -95,6 +96,7 @@ function runGitStream(cwd, args, options = {}) {
     }
 
     signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) onAbort();
     timer = setTimeout(() => {
       timedOut = true;
       terminate();
