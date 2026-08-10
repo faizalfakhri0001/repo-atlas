@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { api, isDemo } from "@/lib/api";
 import { RepositoryTabs } from "@/app/RepositoryTabs";
+import { RecentRepositories } from "@/app/RecentRepositories";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -65,6 +66,11 @@ export function AppShell({
   onClearCherryPick,
   onActivateRepository,
   onCloseRepository,
+  recentRepositories = [],
+  onOpenRecent,
+  onPinRecent,
+  onRemoveRecent,
+  onRevealRecent,
 }) {
   const data = session?.snapshot ?? null;
   const activeView = session?.activeView ?? "overview";
@@ -235,7 +241,14 @@ export function AppShell({
             ) : error && !data ? (
               <ErrorState error={error} onOpen={onOpen} />
             ) : !data ? (
-              <WelcomeState onOpen={onOpen} />
+              <RecentRepositories
+                repositories={recentRepositories}
+                loadingPath={session?.path}
+                onOpenRepository={onOpenRecent}
+                onPin={onPinRecent}
+                onRemove={onRemoveRecent}
+                onReveal={onRevealRecent}
+              />
             ) : (
               <ViewHost
                 view={activeView}

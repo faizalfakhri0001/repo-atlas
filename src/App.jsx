@@ -97,11 +97,19 @@ function App() {
 
   const showWorkspace = useCallback(() => actions.setActiveView("workspace"), [actions]);
 
+  const openRecentRepository = useCallback(
+    (repositoryPath) => (repositoryPath ? loadRepository(repositoryPath, { forceReload: true }) : handleOpen()),
+    [loadRepository],
+  );
+
+  const revealRecentRepository = useCallback((repositoryPath) => api.revealRepository(repositoryPath), []);
+
   return (
     <AppShell
       session={activeSession}
       sessions={state.sessions}
       activeSessionId={state.activeSessionId}
+      recentRepositories={state.recentRepositories}
       theme={theme}
       onThemeChange={setTheme}
       onOpen={handleOpen}
@@ -115,6 +123,10 @@ function App() {
       onClearCherryPick={() => actions.setCherryPick(null)}
       onActivateRepository={actions.activateSession}
       onCloseRepository={actions.closeRepository}
+      onOpenRecent={openRecentRepository}
+      onPinRecent={actions.pinRecent}
+      onRemoveRecent={actions.removeRecent}
+      onRevealRecent={revealRecentRepository}
     />
   );
 }
