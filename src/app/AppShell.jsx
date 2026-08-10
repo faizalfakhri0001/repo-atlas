@@ -19,6 +19,7 @@ import {
   LayoutDashboard,
   LoaderCircle,
   Moon,
+  Radio,
   RefreshCw,
   Sun,
   UsersRound,
@@ -111,6 +112,20 @@ export function AppShell({
   const error = session?.error ?? null;
   const activeView = session?.activeView;
   const cherryPick = session?.ui.cherryPick ?? null;
+  const watchStatus = session?.ui?.watchStatus ?? null;
+  const watchError = session?.ui?.watchError ?? null;
+  const watchLabel = watchError
+    ? "Auto refresh error"
+    : watchStatus?.polling
+      ? "Fallback polling"
+      : watchStatus?.watching
+        ? watchStatus.active === false
+          ? "Paused"
+          : "Watching"
+        : watchStatus
+          ? "Auto refresh off"
+          : null;
+  const watchVariant = watchError ? "destructive" : watchStatus?.polling ? "warning" : watchStatus?.watching ? "success" : "muted";
   const selectedSessionId = activeSessionId ?? session?.id;
   const workspaceSessions = useMemo(() => (sessions.length > 0 ? sessions : session ? [session] : []), [session, sessions]);
   const loadedSessions = workspaceSessions.filter((candidate) => candidate.snapshot);
@@ -292,10 +307,16 @@ export function AppShell({
                     <FlaskConical className="size-3" /> Demo data
                   </Badge>
                 )}
+                {!isDemo && watchLabel && (
+                  <Badge variant={watchVariant} title={watchError?.message ?? watchStatus?.fallbackReason ?? undefined}>
+                    {watchError ? <CircleAlert className="size-3" /> : <Radio className="size-3" />}
+                    {watchLabel}
+                  </Badge>
+                )}
               </div>
               <div className="truncate text-xs text-muted-foreground">
                 {data
-                  ? `Scanned ${formatRelativeDate(data.scannedAt)} · ${data.repository.shortHead} · ${data.repository.gitVersion.replace("git version ", "Git ")}`
+                  ? `Scanned ${formatRelativeDate(data.scannedAt)} · ${data.repository.shortHead} · ${data.repository.gitVersion.replace("git version ", "Git ")}${session?.ui?.lastRepositoryChange ? " · Updated just now" : ""}`
                   : "All repository data remains on this device."}
               </div>
             </div>

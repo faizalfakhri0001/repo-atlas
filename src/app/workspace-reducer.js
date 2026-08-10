@@ -88,6 +88,16 @@ function updateSession(state, sessionId, update) {
   return { ...state, sessions };
 }
 
+export function mergeRepositorySnapshot(snapshot, partialData) {
+  if (!snapshot || !partialData || typeof partialData !== "object") return snapshot;
+  const { repository, ...partial } = partialData;
+  return {
+    ...snapshot,
+    ...partial,
+    ...(repository ? { repository: { ...snapshot.repository, ...repository } } : {}),
+  };
+}
+
 function ensureSession(state, repositoryPath, lastActivatedAt) {
   const existing = findRepositorySession(state, repositoryPath);
   if (existing) return { state, sessionId: existing.id };
@@ -252,6 +262,41 @@ export function workspaceReducer(state, action) {
 
     case "SESSION_MARK_STALE":
       return updateSession(state, action.sessionId, (session) => ({ ...session, status: "stale" }));
+
+    case "session/set-watch-status":
+      return updateSession(state, action.sessionId, (session) => ({
+        ...session,
+        ui: { ...session.ui, watchStatus: action.status ?? null, watchError: null },
+      }));
+
+    case "session/set-watch-error":
+      return updateSession(state, action.sessionId, (session) => ({
+        ...session,
+        ui: { ...session.ui, watchError: action.error ?? { message: "Automatic refresh failed." } },
+      }));
+
+    case "session/partial-refresh-success":
+      return updateSession(state, action.sessionId, (session) => {
+        if (!session.snapshot) return session;
+        return {
+          ...session,
+          snapshot: mergeRepositorySnapshot(session.snapshot, action.data),
+          status: "ready",
+          loading: false,
+          error: null,
+          ui: {
+            ...session.ui,
+            watchError: null,
+            lastRepositoryChange: action.event ?? null,
+          },
+        };
+      });
+
+    case "session/partial-refresh-failure":
+      return updateSession(state, action.sessionId, (session) => ({
+        ...session,
+        ui: { ...session.ui, watchError: action.error ?? { message: "Automatic refresh failed." } },
+      }));
 
     case "RECENT_UPSERT":
       return {

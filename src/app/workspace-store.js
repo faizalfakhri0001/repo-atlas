@@ -19,6 +19,7 @@ export {
   getSessionId,
   getRepositoryName,
   MAX_OPEN_SESSIONS,
+  mergeRepositorySnapshot,
   workspaceReducer,
 } from "./workspace-reducer";
 export * from "./workspace-persistence";
@@ -67,6 +68,10 @@ export function useWorkspaceStore({ storage = null } = {}) {
       setFileHistory: (value, sessionId = null) => dispatch({ type: "session/set-file-history", value, sessionId }),
       requestFileFilter: (nonce = Date.now()) => dispatch({ type: "session/request-file-filter", nonce }),
       requestFileSelection: (path, nonce = Date.now(), openHistory = false, sessionId = null, revision = null) => dispatch({ type: "session/request-file-selection", path, nonce, openHistory, sessionId, revision }),
+      setWatchStatus: (sessionId, status) => dispatch({ type: "session/set-watch-status", sessionId, status }),
+      setWatchError: (sessionId, error) => dispatch({ type: "session/set-watch-error", sessionId, error }),
+      partialRefreshSucceeded: (sessionId, data, event) => dispatch({ type: "session/partial-refresh-success", sessionId, data, event }),
+      partialRefreshFailed: (sessionId, error) => dispatch({ type: "session/partial-refresh-failure", sessionId, error }),
     }),
     [],
   );

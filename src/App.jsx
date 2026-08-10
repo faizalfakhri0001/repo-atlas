@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, isDemo } from "@/lib/api";
 import { AppShell } from "@/app/AppShell";
 import { MAX_OPEN_SESSIONS, useWorkspaceStore } from "@/app/workspace-store";
+import { getRepositoryRefreshPlan } from "@/app/repository-refresh-plan";
 
 function App() {
   const workspaceStorage = !isDemo && typeof window !== "undefined" ? window.localStorage : null;
@@ -10,6 +11,10 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem("repo-atlas-theme") || "dark");
   const initialized = useRef(false);
   const quickFileRequest = useRef(0);
+  const sessionsRef = useRef(state.sessions);
+  const watchedSessionIdsRef = useRef(new Set());
+  const refreshQueuesRef = useRef(new Map());
+  sessionsRef.current = state.sessions;
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -65,6 +70,129 @@ function App() {
   const handleRefresh = useCallback(() => {
     if (activeSession?.path) loadRepository(activeSession.path, { refresh: true, sessionId: activeSession.id });
   }, [activeSession, loadRepository]);
+
+  const enqueueRepositoryChange = useCallback(
+    (event) => {
+      if (!event?.kind || typeof api.refreshRepositoryPartial !== "function") return;
+      const session = sessionsRef.current.find(
+        (candidate) => candidate.id === event.sessionId || candidate.path === event.repositoryPath,
+      );
+      if (!session?.snapshot || !session.path) return;
+      const plan = getRepositoryRefreshPlan(event.kind);
+      if (!plan) return;
+
+      let queue = refreshQueuesRef.current.get(session.id);
+      if (!queue) {
+        queue = {
+          sessionId: session.id,
+          repositoryPath: session.path,
+          parts: new Set(),
+          events: [],
+          running: false,
+        };
+        refreshQueuesRef.current.set(session.id, queue);
+      }
+      for (const part of plan.parts) queue.parts.add(part);
+      queue.events.push(event);
+      if (queue.running) return;
+
+      queue.running = true;
+      void (async () => {
+        try {
+          while (queue.parts.size > 0) {
+            const parts = [...queue.parts];
+            queue.parts.clear();
+            const events = queue.events.splice(0);
+            const response = await api.refreshRepositoryPartial({ repositoryPath: queue.repositoryPath, parts });
+            if (response?.ok === false) {
+              actions.partialRefreshFailed(queue.sessionId, response.error ?? { message: "Automatic refresh failed.", code: "REFRESH_FAILED" });
+              break;
+            }
+            actions.partialRefreshSucceeded(queue.sessionId, response?.data ?? response, events.at(-1) ?? event);
+          }
+        } catch (refreshError) {
+          actions.partialRefreshFailed(queue.sessionId, {
+            message: refreshError?.message || "Automatic refresh failed.",
+            code: "REFRESH_FAILED",
+          });
+        } finally {
+          if (refreshQueuesRef.current.get(queue.sessionId) === queue) refreshQueuesRef.current.delete(queue.sessionId);
+        }
+      })();
+    },
+    [actions],
+  );
+
+  useEffect(() => {
+    if (typeof api.startRepositoryWatch !== "function") return undefined;
+    const readySessions = state.sessions.filter((candidate) => candidate.path && candidate.snapshot);
+    const readyIds = new Set(readySessions.map((candidate) => candidate.id));
+
+    for (const session of readySessions) {
+      if (watchedSessionIdsRef.current.has(session.id)) continue;
+      watchedSessionIdsRef.current.add(session.id);
+      void api
+        .startRepositoryWatch({ sessionId: session.id, repositoryPath: session.path, mode: "smart" })
+        .then((response) => {
+          if (response?.ok === false) {
+            actions.setWatchError(session.id, response.error ?? { message: "Automatic refresh could not start.", code: "WATCH_START_FAILED" });
+            return;
+          }
+          if (response?.data) actions.setWatchStatus(session.id, response.data);
+        })
+        .catch((watchError) => {
+          actions.setWatchError(session.id, {
+            message: watchError?.message || "Automatic refresh could not start.",
+            code: "WATCH_START_FAILED",
+          });
+        });
+    }
+
+    for (const sessionId of watchedSessionIdsRef.current) {
+      if (readyIds.has(sessionId)) continue;
+      watchedSessionIdsRef.current.delete(sessionId);
+      void api.stopRepositoryWatch?.(sessionId);
+      refreshQueuesRef.current.delete(sessionId);
+    }
+    return undefined;
+  }, [actions, state.sessions]);
+
+  useEffect(() => {
+    if (typeof api.stopRepositoryWatch !== "function") return undefined;
+    return () => {
+      const sessionIds = [...watchedSessionIdsRef.current];
+      watchedSessionIdsRef.current.clear();
+      for (const sessionId of sessionIds) void api.stopRepositoryWatch(sessionId);
+      refreshQueuesRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribeChanged = api.onRepositoryChanged?.(enqueueRepositoryChange);
+    const unsubscribeStatus = api.onRepositoryWatchStatus?.((status) => {
+      if (status?.sessionId) actions.setWatchStatus(status.sessionId, status);
+    });
+    const unsubscribeError = api.onRepositoryWatchError?.((watchError) => {
+      if (watchError?.sessionId) actions.setWatchError(watchError.sessionId, watchError);
+    });
+    return () => {
+      unsubscribeChanged?.();
+      unsubscribeStatus?.();
+      unsubscribeError?.();
+    };
+  }, [actions, enqueueRepositoryChange]);
+
+  const watchedSessions = state.sessions.filter((candidate) => candidate.path && candidate.snapshot);
+  const watchedSessionKey = watchedSessions.map((candidate) => candidate.id).join("\0");
+  useEffect(() => {
+    if (typeof api.setRepositoryWatchActivity !== "function") return;
+    for (const watchedSession of watchedSessions) {
+      void api.setRepositoryWatchActivity({
+        sessionId: watchedSession.id,
+        active: watchedSession.id === state.activeSessionId,
+      });
+    }
+  }, [state.activeSessionId, watchedSessionKey]);
 
   const activateRepository = useCallback(
     (sessionId) => {
