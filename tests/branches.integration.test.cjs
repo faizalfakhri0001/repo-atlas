@@ -26,6 +26,12 @@ test("branch intelligence reports ahead and behind counts against the current de
   await write("README.md", "main\n");
   await git("add", "README.md");
   await git("commit", "-m", "Advance main");
+  await git("checkout", "-b", "feature/merged");
+  await write("merged.txt", "merged\n");
+  await git("add", "merged.txt");
+  await git("commit", "-m", "Add merged change");
+  await git("checkout", "main");
+  await git("merge", "--ff-only", "feature/merged");
   await git("branch", "feature/ahead", "main");
   await git("checkout", "feature/ahead");
   await write("ahead.txt", "ahead\n");
@@ -49,4 +55,7 @@ test("branch intelligence reports ahead and behind counts against the current de
     { ahead: 0, behind: 1 },
   );
   assert.equal(ahead.mergeBase, await git("rev-parse", "main").then((result) => result.stdout.trim().slice(0, 40)));
+  const merged = result.branches.find((branch) => branch.name === "feature/merged");
+  assert.equal(merged.mergedIntoDefault, true);
+  assert.equal(merged.status, "merged");
 });

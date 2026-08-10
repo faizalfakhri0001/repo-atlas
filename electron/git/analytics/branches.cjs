@@ -235,13 +235,14 @@ async function branchIntelligence(repositoryPath, options = {}) {
   const remoteBranches = metadata.branches.filter((branch) => branch.remote);
   const analyzed = defaultCommit
       ? await mapWithConcurrency(localBranches, BRANCH_ANALYSIS_CONCURRENCY, async (branch) => {
-        const [countResult, mergeBaseResult] = await Promise.all([
+        const [countResult, mergeBaseResult, mergedResult] = await Promise.all([
           runGit(
             repository.rootPath,
             ["rev-list", "--left-right", "--count", `${defaultCommit.hash}...${branch.hash}`, "--"],
             { allowFailure: true },
           ),
           runGit(repository.rootPath, ["merge-base", defaultCommit.hash, branch.hash], { allowFailure: true }),
+          runGit(repository.rootPath, ["merge-base", "--is-ancestor", branch.hash, defaultCommit.hash], { allowFailure: true }),
         ]);
         const counts = countResult.failed ? { ahead: 0, behind: 0 } : parseDivergenceCounts(countResult.stdout);
         return buildBranchRecord(branch, {
@@ -250,6 +251,7 @@ async function branchIntelligence(repositoryPath, options = {}) {
           aheadOfDefault: counts.ahead,
           behindDefault: counts.behind,
           mergeBase: mergeBaseResult.failed ? null : mergeBaseResult.stdout.trim() || null,
+          mergedIntoDefault: mergedResult.code === 0 && branch.name !== defaultBranchInfo.defaultBranch,
           analyzed: true,
           now,
         });
