@@ -12,3 +12,10 @@ export { SplitDiff } from "@/features/diff/split-diff";
 export { DiffToolbar } from "@/features/diff/diff-toolbar";
 export { languageForPath, languageMap } from "@/features/diff/language-map";
 export { SyntaxLine } from "@/features/diff/syntax-line";
+export {
+  DEFAULT_DIFF_PREFERENCES,
+  DIFF_PREFERENCES_KEY,
+  loadDiffPreferences,
+  normalizeDiffPreferences,
+  saveDiffPreferences,
+} from "@/features/diff/diff-preferences";
