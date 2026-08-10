@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld("repoAtlas", {
   setOperationMode: (payload) => ipcRenderer.invoke("settings:set-operation-mode", payload),
   stageFiles: (payload) => ipcRenderer.invoke("workspace:stage-files", payload),
   unstageFiles: (payload) => ipcRenderer.invoke("workspace:unstage-files", payload),
+  stageHunk: (payload) => ipcRenderer.invoke("workspace:stage-hunk", payload),
+  unstageHunk: (payload) => ipcRenderer.invoke("workspace:unstage-hunk", payload),
   onRepositoryChanged: (listener) => {
     if (typeof listener !== "function") return () => {};
     const wrapped = (_event, payload) => listener(payload);

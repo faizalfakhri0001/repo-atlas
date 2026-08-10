@@ -23,6 +23,8 @@ const {
   branchIntelligence,
   stageFiles,
   unstageFiles,
+  stageHunk,
+  unstageHunk,
   refreshRepositoryPartial,
   GitServiceError,
 } = require("./git-service.cjs");
@@ -53,7 +55,7 @@ async function executeWorkspaceOperation(payload, operation) {
   const transactionId = watchManager.beginTransaction(sessionId);
   try {
     const operationMode = await preferences.getOperationMode();
-    const data = await operation(payload?.repositoryPath, payload?.paths, { operationMode });
+    const data = await operation({ operationMode });
     return { ...data, transactionId };
   } finally {
     watchManager.endTransaction(sessionId, transactionId);
@@ -149,8 +151,18 @@ function registerIpcHandlers() {
     "branches:intelligence": (payload) => branchIntelligence(payload?.repositoryPath, payload ?? {}),
     "settings:get-operation-mode": async () => ({ operationMode: await preferences.getOperationMode() }),
     "settings:set-operation-mode": async (payload) => ({ operationMode: await preferences.setOperationMode(payload?.mode) }),
-    "workspace:stage-files": (payload) => executeWorkspaceOperation(payload, stageFiles),
-    "workspace:unstage-files": (payload) => executeWorkspaceOperation(payload, unstageFiles),
+    "workspace:stage-files": (payload) => executeWorkspaceOperation(payload, ({ operationMode }) => stageFiles(payload?.repositoryPath, payload?.paths, { operationMode })),
+    "workspace:unstage-files": (payload) => executeWorkspaceOperation(payload, ({ operationMode }) => unstageFiles(payload?.repositoryPath, payload?.paths, { operationMode })),
+    "workspace:stage-hunk": (payload) => executeWorkspaceOperation(payload, ({ operationMode }) => stageHunk(payload?.repositoryPath, {
+      path: payload?.path,
+      hunkId: payload?.hunkId,
+      source: payload?.source,
+    }, { operationMode })),
+    "workspace:unstage-hunk": (payload) => executeWorkspaceOperation(payload, ({ operationMode }) => unstageHunk(payload?.repositoryPath, {
+      path: payload?.path,
+      hunkId: payload?.hunkId,
+      source: payload?.source,
+    }, { operationMode })),
     "repository:refresh-partial": (payload) => refreshRepositoryPartial(payload?.repositoryPath, payload?.parts),
     "repository:watch-start": (payload) => watchManager.start({ sessionId: payload?.sessionId, repositoryPath: payload?.repositoryPath, mode: payload?.mode }),
     "repository:watch-stop": (payload) => watchManager.stop(payload?.sessionId),
