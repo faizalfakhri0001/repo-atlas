@@ -348,6 +348,86 @@ function createDemoAnalyticsSummary(commits, mainTip, options = {}) {
   };
 }
 
+function demoGeneratedPath(filePath) {
+  const normalized = String(filePath ?? "").replaceAll("\\", "/").toLowerCase();
+  const segments = normalized.split("/").filter(Boolean);
+  const basename = segments.at(-1) ?? "";
+  return (
+    segments.some((segment) => ["build", "coverage", "dist", "node_modules", "vendor"].includes(segment)) ||
+    ["bun.lock", "bun.lockb", "cargo.lock", "composer.lock", "gemfile.lock", "go.sum", "npm-shrinkwrap.json", "package-lock.json", "pnpm-lock.yaml", "pnpm-lock.yml", "yarn.lock"].includes(basename) ||
+    basename.endsWith(".lock") ||
+    basename.endsWith(".lockb") ||
+    basename.endsWith(".min.js") ||
+    basename.endsWith(".min.css")
+  );
+}
+
+function demoPercentile(values, value) {
+  if (values.length === 0) return 0;
+  if (values.length === 1) return 1;
+  return Math.min(1, Math.max(0, values.filter((candidate) => candidate < value).length / (values.length - 1)));
+}
+
+function createDemoHotspotSummary(commits, mainTip, options = {}) {
+  const summary = createDemoAnalyticsSummary(commits, mainTip, { ...options, limit: 100 });
+  const includeGenerated = Boolean(options.includeGenerated);
+  const pathPrefix = String(options.pathPrefix ?? "").trim().replace(/\/+$/, "");
+  const matching = summary.files.filter((file) => !pathPrefix || file.path === pathPrefix || file.path.startsWith(`${pathPrefix}/`));
+  const generatedFiles = matching.filter((file) => demoGeneratedPath(file.path));
+  const eligible = includeGenerated ? matching : matching.filter((file) => !demoGeneratedPath(file.path));
+  const now = Date.now();
+  const commitCounts = eligible.map((file) => file.commits);
+  const churnValues = eligible.map((file) => file.churn);
+  const scored = eligible.map((file) => {
+    const changedAt = Date.parse(file.lastChangedAt ?? "");
+    const ageDays = Number.isFinite(changedAt) ? Math.max(0, (now - changedAt) / (24 * 60 * 60 * 1000)) : null;
+    const recencyScore = ageDays == null ? 0 : Math.exp(-ageDays / 180);
+    const commitFrequencyPercentile = demoPercentile(commitCounts, file.commits);
+    const churnPercentile = demoPercentile(churnValues, file.churn);
+    const hotspotScore = 0.45 * commitFrequencyPercentile + 0.35 * churnPercentile + 0.2 * recencyScore;
+    return {
+      ...file,
+      commitCount: file.commits,
+      commitFrequency: file.commits,
+      authorCount: file.authors.length,
+      ageDays,
+      recencyScore,
+      commitFrequencyPercentile,
+      commitFrequencyScore: commitFrequencyPercentile,
+      churnPercentile,
+      churnScore: churnPercentile,
+      hotspotScore,
+      hotspotBand: hotspotScore >= 0.75 ? "High" : hotspotScore >= 0.4 ? "Medium" : "Low",
+    };
+  });
+  const hotspotScores = scored.map((file) => file.hotspotScore);
+  const limit = Math.min(1000, Math.max(1, Math.floor(Number(options.limit) || 100)));
+  const files = scored
+    .map((file) => ({ ...file, hotspotPercentile: demoPercentile(hotspotScores, file.hotspotScore) }))
+    .sort((left, right) => right.hotspotScore - left.hotspotScore || right.churn - left.churn || left.path.localeCompare(right.path))
+    .slice(0, limit);
+  const reportTruncated = eligible.length > files.length;
+
+  return {
+    ...summary,
+    metrics: { weights: { commitFrequency: 0.45, churn: 0.35, recency: 0.2 }, recencyWindowDays: 180, percentileRange: [0, 1] },
+    filters: { includeGenerated, pathPrefix, generatedFiles: generatedFiles.length, excludedGeneratedFiles: includeGenerated ? 0 : generatedFiles.length },
+    scope: {
+      ...summary.scope,
+      sourceTruncated: Boolean(summary.scope.truncated),
+      totalFiles: summary.files.length,
+      matchedFiles: matching.length,
+      eligibleFiles: eligible.length,
+      returnedFiles: files.length,
+      reportLimit: limit,
+      reportTruncated,
+      truncated: Boolean(summary.scope.truncated || reportTruncated),
+    },
+    totals: { ...summary.totals, files: summary.files.length, eligibleFiles: eligible.length, returnedFiles: files.length },
+    files,
+  };
+}
+
 export function createDemoApi() {
   const dataset = buildDataset();
   const { commits, byHash, branchTips, tags } = dataset;
@@ -692,6 +772,7 @@ export function createDemoApi() {
     revealRepositoryFile: () => Promise.resolve({ ok: true }),
     scanRepository: () => ok(scanData()),
     analyticsSummary: (payload = {}) => ok(createDemoAnalyticsSummary(commits, mainTip, payload)),
+    hotspots: (payload = {}) => ok(createDemoHotspotSummary(commits, mainTip, payload)),
     branchIntelligence: (payload = {}) => ok(createDemoBranchIntelligence(payload)),
     repositorySearch: (payload) => ok(searchDemoRepository(payload)),
     listRepositoryFiles: () => ok(demoFiles),

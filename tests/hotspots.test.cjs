@@ -6,6 +6,7 @@ const {
   calculateCommitFrequency,
   calculateHotspotScore,
   calculateRecencyScore,
+  buildHotspotReport,
   collectFileActivity,
   filterGeneratedFiles,
   isGeneratedPath,
@@ -91,6 +92,33 @@ test("generated and lock paths are excluded by default but can be included", () 
   assert.equal(filtered.excludedGeneratedFiles, 0);
   assert.deepEqual(filterGeneratedFiles(files).files.map((file) => file.path), ["src/app.js", "docs/readme.md"]);
   assert.deepEqual(filterGeneratedFiles(files, { includeGenerated: true }).files.map((file) => file.path), files.map((file) => file.path));
+});
+
+test("buildHotspotReport bounds output while preserving scope and raw metrics", () => {
+  const index = {
+    repositoryKey: "/workspace/repository",
+    head: "a".repeat(40),
+    generatedAt: "2026-08-10T00:00:00.000Z",
+    scope: { maxCommits: 10, processedCommits: 10, truncated: false, filesTruncated: false },
+    totals: { commits: 10, files: 3, additions: 42, deletions: 8 },
+    files: new Map([
+      ["src/app.js", { path: "src/app.js", commits: 4, additions: 30, deletions: 5, authors: new Map(), lastChangedAt: "2026-08-10T00:00:00.000Z" }],
+      ["src/old.js", { path: "src/old.js", commits: 1, additions: 1, deletions: 1, authors: new Map(), lastChangedAt: "2025-01-01T00:00:00.000Z" }],
+      ["package-lock.json", { path: "package-lock.json", commits: 8, additions: 10, deletions: 2, authors: new Map(), lastChangedAt: "2026-08-09T00:00:00.000Z" }],
+    ]),
+  };
+
+  const report = buildHotspotReport(index, { limit: 1, now: "2026-08-10T00:00:00.000Z" });
+  assert.equal(report.files.length, 1);
+  assert.equal(report.files[0].path, "src/app.js");
+  assert.equal(report.files[0].commitCount, 4);
+  assert.equal(report.files[0].churn, 35);
+  assert.equal(report.scope.totalFiles, 3);
+  assert.equal(report.scope.eligibleFiles, 2);
+  assert.equal(report.scope.returnedFiles, 1);
+  assert.equal(report.scope.reportTruncated, true);
+  assert.equal(report.filters.excludedGeneratedFiles, 1);
+  assert.deepEqual(report.metrics.weights, { commitFrequency: 0.45, churn: 0.35, recency: 0.2 });
 });
 
 test("collectFileActivity normalizes file metrics from the shared analytics index", () => {

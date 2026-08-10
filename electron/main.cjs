@@ -16,6 +16,7 @@ const {
   sequencerAction,
   searchRepository,
   analyticsSummary,
+  hotspotSummary,
   branchIntelligence,
   GitServiceError,
 } = require("./git-service.cjs");
@@ -104,6 +105,7 @@ function registerIpcHandlers() {
     "sequencer:action": (payload) => sequencerAction(payload?.repositoryPath, payload?.action),
     "repository:search": (payload) => searchRepository(payload?.repositoryPath, payload ?? {}),
     "analytics:summary": (payload) => analyticsSummary(payload?.repositoryPath, payload ?? {}),
+    "analytics:hotspots": (payload) => hotspotSummary(payload?.repositoryPath, payload ?? {}),
     "branches:intelligence": (payload) => branchIntelligence(payload?.repositoryPath, payload ?? {}),
   };
 

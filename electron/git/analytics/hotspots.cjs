@@ -191,6 +191,89 @@ function filterGeneratedFiles(files, { includeGenerated = false, pathPrefix = ""
   };
 }
 
+function compareHotspotFiles(left, right) {
+  return (
+    right.hotspotScore - left.hotspotScore ||
+    right.churn - left.churn ||
+    right.commitCount - left.commitCount ||
+    left.path.localeCompare(right.path)
+  );
+}
+
+function serializeHotspotFile(file) {
+  return {
+    path: file.path,
+    commitCount: file.commitCount,
+    commits: file.commits,
+    commitFrequency: file.commitFrequency,
+    additions: file.additions,
+    deletions: file.deletions,
+    churn: file.churn,
+    authorCount: file.authorCount,
+    authors: file.authors.map((author) => ({
+      ...author,
+      aliases: author.aliases instanceof Set ? [...author.aliases] : author.aliases,
+    })),
+    firstSeenAt: file.firstSeenAt,
+    lastChangedAt: file.lastChangedAt,
+    ageDays: file.ageDays,
+    recencyScore: file.recencyScore,
+    commitFrequencyPercentile: file.commitFrequencyPercentile,
+    commitFrequencyScore: file.commitFrequencyScore,
+    churnPercentile: file.churnPercentile,
+    churnScore: file.churnScore,
+    hotspotScore: file.hotspotScore,
+    hotspotPercentile: file.hotspotPercentile,
+    hotspotBand: file.hotspotBand,
+  };
+}
+
+function buildHotspotReport(index, options = {}) {
+  const limit = normalizeHotspotLimit(options.limit);
+  const activities = collectFileActivity(index);
+  const scored = scoreHotspotActivity(activities, { now: options.now ?? Date.now() });
+  const filtered = filterGeneratedFiles(scored, options);
+  const sorted = filtered.files.slice().sort(compareHotspotFiles);
+  const files = sorted.slice(0, limit).map(serializeHotspotFile);
+  const reportTruncated = sorted.length > files.length;
+  const sourceScope = index?.scope ?? {};
+
+  return {
+    repositoryKey: index?.repositoryKey ?? "",
+    head: index?.head ?? "",
+    generatedAt: index?.generatedAt ?? new Date().toISOString(),
+    metrics: {
+      weights: { ...HOTSPOT_WEIGHTS },
+      recencyWindowDays: RECENCY_WINDOW_DAYS,
+      percentileRange: [0, 1],
+    },
+    filters: {
+      includeGenerated: filtered.includeGenerated,
+      pathPrefix: filtered.pathPrefix,
+      generatedFiles: filtered.generatedFiles,
+      excludedGeneratedFiles: filtered.excludedGeneratedFiles,
+    },
+    scope: {
+      ...sourceScope,
+      sourceTruncated: Boolean(sourceScope.truncated),
+      totalFiles: filtered.totalFiles,
+      matchedFiles: filtered.matchedFiles,
+      eligibleFiles: sorted.length,
+      returnedFiles: files.length,
+      reportLimit: limit,
+      reportTruncated,
+      truncated: Boolean(sourceScope.truncated || reportTruncated),
+    },
+    totals: {
+      ...(index?.totals ?? {}),
+      files: filtered.totalFiles,
+      eligibleFiles: sorted.length,
+      returnedFiles: files.length,
+    },
+    files,
+  };
+}
+
 function normalizeHotspotLimit(value) {
   return Math.min(MAX_HOTSPOT_LIMIT, Math.max(1, Math.floor(Number(value) || DEFAULT_HOTSPOT_LIMIT)));
 }
@@ -210,6 +293,9 @@ module.exports = {
   hotspotBand,
   filterGeneratedFiles,
   isGeneratedPath,
+  buildHotspotReport,
+  compareHotspotFiles,
+  serializeHotspotFile,
   normalizeHotspotLimit,
   normalizePathPrefix,
   pathMatchesPrefix,
