@@ -328,6 +328,7 @@ function cancelAnalyticsBuild(repositoryPath) {
 
 function invalidateAnalyticsCache(repositoryPath) {
   const rootPath = path.resolve(repositoryPath);
+  cancelAnalyticsBuild(rootPath);
   return analyticsCache.invalidateRepository(rootPath);
 }
 

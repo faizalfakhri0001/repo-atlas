@@ -15,9 +15,9 @@ const {
 const { listRepositoryFiles, parseRepositoryFileList, readRepositoryFile } = require("./git/files.cjs");
 const { listFileHistory } = require("./git/history.cjs");
 const { readFileAtRevision } = require("./git/revisions.cjs");
-const { fileBlame } = require("./git/blame.cjs");
+const { fileBlame, blameCache } = require("./git/blame.cjs");
 const { searchRepository } = require("./git/search.cjs");
-const { getAnalyticsIndex, serializeAnalyticsIndex } = require("./git/analytics/index.cjs");
+const { getAnalyticsIndex, invalidateAnalyticsCache, serializeAnalyticsIndex } = require("./git/analytics/index.cjs");
 const { buildHotspotReport } = require("./git/analytics/hotspots.cjs");
 const { buildOwnershipReport } = require("./git/analytics/ownership.cjs");
 const { buildHealthReport, parseTrackedFileRows } = require("./git/analytics/health.cjs");
@@ -1030,6 +1030,19 @@ function buildPartialRepository(repository, status, defaultBranchInfo = {}) {
   };
 }
 
+function invalidateRepositoryDerivedCaches(repository, parts, status) {
+  const invalidated = [];
+  if (parts.includes("refs") || parts.includes("head")) {
+    invalidateAnalyticsCache(repository.rootPath);
+    invalidated.push("analytics");
+  }
+  if (parts.includes("head") && status?.oid && status.oid !== "(initial)") {
+    blameCache.invalidateHead(repository.rootPath, status.oid);
+    invalidated.push("blame-head");
+  }
+  return invalidated;
+}
+
 async function readPartialStatus(repository) {
   const [statusResult, state] = await Promise.all([
     runGit(repository.rootPath, ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]),
@@ -1116,7 +1129,12 @@ async function refreshRepositoryPartial(repositoryPath, requestedParts = []) {
     const count = await runGit(repository.rootPath, ["rev-list", "--count", "--all"], { allowFailure: true });
     data.repository = { ...data.repository, totalCommits: count.failed ? null : Number(count.stdout) || 0 };
   }
-  return { repositoryPath: repository.rootPath, parts, data };
+  return {
+    repositoryPath: repository.rootPath,
+    parts,
+    data,
+    invalidated: invalidateRepositoryDerivedCaches(repository, parts, partialStatus?.status),
+  };
 }
 
 module.exports = {
@@ -1162,6 +1180,7 @@ module.exports = {
   listTrackedFileSizes,
   branchIntelligence,
   PARTIAL_REFRESH_PARTS,
+  invalidateRepositoryDerivedCaches,
   refreshRepositoryPartial,
   compareRefs,
   cherryPickPreview,
