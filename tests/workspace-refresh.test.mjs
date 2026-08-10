@@ -46,6 +46,7 @@ test("partial refresh merges only returned data and preserves session context", 
     type: "session/partial-refresh-success",
     sessionId: "/workspace/repository",
     event,
+    parts: ["status"],
     data: {
       scannedAt: "2026-08-10T10:01:00.000Z",
       repository: { currentBranch: "main", head: "1111111", dirty: true },
@@ -60,6 +61,7 @@ test("partial refresh merges only returned data and preserves session context", 
   assert.deepEqual(session.ui.lastRepositoryChange, event);
   assert.equal(session.snapshot.repository.name, "repository");
   assert.equal(session.snapshot.repository.dirty, true);
+  assert.equal(session.snapshot.scannedAt, "2026-08-10T10:00:00.000Z");
   assert.deepEqual(session.snapshot.branches, [{ name: "main" }]);
   assert.deepEqual(session.snapshot.commits, [{ hash: "1111111" }]);
   assert.deepEqual(session.snapshot.status.files, [{ path: "src/app.js", kind: "changed" }]);
@@ -76,6 +78,24 @@ test("partial refresh failures keep repository data available and expose watcher
 
   assert.equal(state.sessions[0].snapshot.repository.name, "repository");
   assert.deepEqual(state.sessions[0].ui.watchError, { message: "Git is temporarily unavailable.", code: "GIT_FAILED" });
+});
+
+test("ref refresh advances the revision timestamp for dependent views", () => {
+  let state = loadedState();
+  state = workspaceReducer(state, {
+    type: "session/partial-refresh-success",
+    sessionId: "/workspace/repository",
+    parts: ["refs"],
+    event: { repositoryPath: "/workspace/repository", kind: "refs", timestamp: 456 },
+    data: {
+      scannedAt: "2026-08-10T10:02:00.000Z",
+      repository: { currentBranch: "main" },
+      branches: [{ name: "main" }, { name: "feature" }],
+    },
+  });
+
+  assert.equal(state.sessions[0].snapshot.scannedAt, "2026-08-10T10:02:00.000Z");
+  assert.deepEqual(state.sessions[0].snapshot.branches, [{ name: "main" }, { name: "feature" }]);
 });
 
 test("snapshot merge leaves omitted repository sections untouched", () => {

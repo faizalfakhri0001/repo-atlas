@@ -70,7 +70,7 @@ export function useWorkspaceStore({ storage = null } = {}) {
       requestFileSelection: (path, nonce = Date.now(), openHistory = false, sessionId = null, revision = null) => dispatch({ type: "session/request-file-selection", path, nonce, openHistory, sessionId, revision }),
       setWatchStatus: (sessionId, status) => dispatch({ type: "session/set-watch-status", sessionId, status }),
       setWatchError: (sessionId, error) => dispatch({ type: "session/set-watch-error", sessionId, error }),
-      partialRefreshSucceeded: (sessionId, data, event) => dispatch({ type: "session/partial-refresh-success", sessionId, data, event }),
+      partialRefreshSucceeded: (sessionId, data, event, parts = null) => dispatch({ type: "session/partial-refresh-success", sessionId, data, event, parts }),
       partialRefreshFailed: (sessionId, error) => dispatch({ type: "session/partial-refresh-failure", sessionId, error }),
     }),
     [],

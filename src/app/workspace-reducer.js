@@ -88,12 +88,13 @@ function updateSession(state, sessionId, update) {
   return { ...state, sessions };
 }
 
-export function mergeRepositorySnapshot(snapshot, partialData) {
+export function mergeRepositorySnapshot(snapshot, partialData, { updateScannedAt = true } = {}) {
   if (!snapshot || !partialData || typeof partialData !== "object") return snapshot;
-  const { repository, ...partial } = partialData;
+  const { repository, scannedAt, ...partial } = partialData;
   return {
     ...snapshot,
     ...partial,
+    ...(updateScannedAt && scannedAt ? { scannedAt } : {}),
     ...(repository ? { repository: { ...snapshot.repository, ...repository } } : {}),
   };
 }
@@ -280,7 +281,9 @@ export function workspaceReducer(state, action) {
         if (!session.snapshot) return session;
         return {
           ...session,
-          snapshot: mergeRepositorySnapshot(session.snapshot, action.data),
+          snapshot: mergeRepositorySnapshot(session.snapshot, action.data, {
+            updateScannedAt: action.parts?.includes("head") || action.parts?.includes("refs") || !action.parts,
+          }),
           status: "ready",
           loading: false,
           error: null,

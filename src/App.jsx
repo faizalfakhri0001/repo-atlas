@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, isDemo } from "@/lib/api";
 import { AppShell } from "@/app/AppShell";
 import { MAX_OPEN_SESSIONS, useWorkspaceStore } from "@/app/workspace-store";
-import { getRepositoryRefreshPlan } from "@/app/repository-refresh-plan";
+import { getRepositoryRefreshPlan, mergeRepositoryRefreshPlans } from "@/app/repository-refresh-plan";
 
 function App() {
   const workspaceStorage = !isDemo && typeof window !== "undefined" ? window.localStorage : null;
@@ -78,7 +78,10 @@ function App() {
         (candidate) => candidate.id === event.sessionId || candidate.path === event.repositoryPath,
       );
       if (!session?.snapshot || !session.path) return;
-      const plan = getRepositoryRefreshPlan(event.kind);
+      const eventPlans = (Array.isArray(event.kinds) && event.kinds.length > 0 ? event.kinds : [event.kind])
+        .map((kind) => getRepositoryRefreshPlan(kind))
+        .filter(Boolean);
+      const plan = mergeRepositoryRefreshPlans(eventPlans);
       if (!plan) return;
 
       let queue = refreshQueuesRef.current.get(session.id);
@@ -108,7 +111,13 @@ function App() {
               actions.partialRefreshFailed(queue.sessionId, response.error ?? { message: "Automatic refresh failed.", code: "REFRESH_FAILED" });
               break;
             }
-            actions.partialRefreshSucceeded(queue.sessionId, response?.data ?? response, events.at(-1) ?? event);
+            const payload = response?.data ?? response;
+            actions.partialRefreshSucceeded(
+              queue.sessionId,
+              payload?.data ?? payload,
+              events.at(-1) ?? event,
+              payload?.parts ?? parts,
+            );
           }
         } catch (refreshError) {
           actions.partialRefreshFailed(queue.sessionId, {
