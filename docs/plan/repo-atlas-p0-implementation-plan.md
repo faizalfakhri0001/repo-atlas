@@ -3199,15 +3199,16 @@ Existing behavior tetap bekerja tanpa regression.
 
 ## Stage 5 — Command Palette
 
-- [ ] command registry.
-- [ ] fuzzy scorer.
-- [ ] palette UI.
-- [ ] keyboard shortcut manager.
-- [ ] navigation commands.
-- [ ] repository commands.
-- [ ] file quick-open integration.
-- [ ] focus handling.
-- [ ] tests.
+- [x] command registry.
+- [x] fuzzy scorer.
+- [x] palette UI.
+- [x] keyboard shortcut manager.
+- [x] navigation commands.
+- [x] repository commands.
+- [x] file quick-open integration.
+- [x] focus handling.
+- [x] tests.
+- [ ] Command Palette E2E. (Dilewati sesuai instruksi pengguna.)
 
 ---
 
@@ -3624,12 +3625,12 @@ select commit
 
 ## Command Palette
 
-- [ ] Command registry
-- [ ] Fuzzy command search
-- [ ] Keyboard shortcut
-- [ ] Navigation actions
-- [ ] Repository actions
-- [ ] Quick file integration
+- [x] Command registry
+- [x] Fuzzy command search
+- [x] Keyboard shortcut
+- [x] Navigation actions
+- [x] Repository actions
+- [x] Quick file integration
 - [ ] Global search integration
 
 ## Recent / Multi Repository
