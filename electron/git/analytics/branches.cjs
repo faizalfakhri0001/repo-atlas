@@ -152,6 +152,7 @@ function buildBranchRecord(branch, context = {}) {
   const aheadOfUpstream = Number(branch.ahead) || 0;
   const behindUpstream = Number(branch.behind) || 0;
   const stale = !branch.remote && ageDays !== null && ageDays >= STALE_AFTER_DAYS;
+  const veryStale = !branch.remote && ageDays !== null && ageDays >= VERY_STALE_AFTER_DAYS;
 
   return {
     name: branch.name,
@@ -171,6 +172,8 @@ function buildBranchRecord(branch, context = {}) {
     mergedIntoDefault,
     lastCommitAt: branch.date || null,
     ageDays,
+    stale,
+    veryStale,
     status: getBranchStatus({
       current: branch.name === currentBranch && !branch.remote,
       gone: goneUpstream,
