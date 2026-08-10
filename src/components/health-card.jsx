@@ -19,10 +19,10 @@ function HealthStatus({ grade }) {
   return <Badge variant={GRADE_VARIANTS[grade] ?? "muted"}>{grade === "healthy" ? "Healthy" : grade === "attention" ? "Attention" : "Warning"}</Badge>;
 }
 
-function CategoryStatus({ category }) {
+function CategoryStatus({ name, category }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/40 px-3 py-2 text-xs">
-      <span className="text-muted-foreground">{CATEGORY_LABELS[category] ?? category}</span>
+      <span className="text-muted-foreground">{CATEGORY_LABELS[name] ?? name}</span>
       <span className={cn("font-medium", category.status === "healthy" ? "text-emerald-400" : category.status === "attention" ? "text-amber-400" : "text-red-400")}>
         {category.status === "healthy" ? "Healthy" : category.status === "attention" ? `${category.signalCount} issue${category.signalCount === 1 ? "" : "s"}` : "Warning"}
       </span>
@@ -90,7 +90,7 @@ export function HealthSummaryCard({ repoPath, revision, onOpenDetails }) {
               <div><HealthStatus grade={state.data?.grade} /><div className="mt-1 text-[11px] text-muted-foreground">Deterministic score with additive penalties</div></div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-              {Object.entries(state.data?.categories ?? {}).map(([key, category]) => <CategoryStatus key={key} category={category} />)}
+              {Object.entries(state.data?.categories ?? {}).map(([key, category]) => <CategoryStatus key={key} name={key} category={category} />)}
             </div>
             <Button variant="outline" onClick={() => onOpenDetails?.()}>
               View health details <ChevronRight />

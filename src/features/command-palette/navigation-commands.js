@@ -12,6 +12,7 @@ const NAVIGATION_COMMANDS = [
   ["refs", "Open Refs & Metadata", "tags remotes stashes", []],
   ["hotspots", "Open Hotspots", "activity churn change frequency", []],
   ["ownership", "Open Ownership", "contributors authors directory concentration", []],
+  ["health", "Open Repository Health", "health score signals repository status", []],
 ];
 
 export function createNavigationCommands() {

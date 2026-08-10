@@ -66,6 +66,7 @@ test("new sessions start with isolated navigation state", () => {
     fileHistory: null,
     fileFilterRequest: null,
     fileSelectionRequest: null,
+    navigationRequest: null,
   });
   assert.equal(session.lastActivatedAt, 10);
 });
