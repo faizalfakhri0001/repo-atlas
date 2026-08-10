@@ -28,6 +28,20 @@ test("analytics cache evicts least recently used indexes and invalidates a repos
   assert.equal(cache.size, 1);
 });
 
+test("the shared analytics cache keeps at most three full indexes", () => {
+  const cache = getAnalyticsCache();
+  cache.clear();
+  assert.equal(cache.maxEntries, 3);
+  cache.set("global-one", 1, { rootPath: "/one" });
+  cache.set("global-two", 2, { rootPath: "/two" });
+  cache.set("global-three", 3, { rootPath: "/three" });
+  cache.set("global-four", 4, { rootPath: "/four" });
+
+  assert.equal(cache.size, 3);
+  assert.equal(cache.get("global-one"), undefined);
+  assert.equal(cache.get("global-four"), 4);
+});
+
 test("analytics index requests for one repository share the in-flight build and cached value", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-analytics-cache-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
