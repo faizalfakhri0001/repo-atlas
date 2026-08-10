@@ -15,7 +15,8 @@ const {
 const { listRepositoryFiles, parseRepositoryFileList, readRepositoryFile } = require("./git/files.cjs");
 const { listFileHistory } = require("./git/history.cjs");
 const { readFileAtRevision } = require("./git/revisions.cjs");
-const { fileBlame, blameCache } = require("./git/blame.cjs");
+const { fileBlame } = require("./git/blame.cjs");
+const { blameCache } = require("./git/blame.cjs");
 const { searchRepository } = require("./git/search.cjs");
 const { getAnalyticsIndex, invalidateAnalyticsCache, serializeAnalyticsIndex } = require("./git/analytics/index.cjs");
 const { buildHotspotReport } = require("./git/analytics/hotspots.cjs");
