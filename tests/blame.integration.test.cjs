@@ -65,3 +65,28 @@ test("fileBlame returns a safe binary response", async (t) => {
   assert.equal(result.message, "Blame unavailable for binary files.");
   assert.deepEqual(result.lines, []);
 });
+
+test("fileBlame disables files that exceed the size or line guard", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-blame-guard-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const git = (...args) => execFileAsync("git", args, { cwd: root, encoding: "utf8" });
+
+  await git("init", "-b", "main");
+  await git("config", "user.name", "Repo Atlas Test");
+  await git("config", "user.email", "repo-atlas@example.test");
+  await fs.writeFile(path.join(root, "large.txt"), Buffer.alloc(2 * 1024 * 1024 + 1, 97));
+  await fs.writeFile(path.join(root, "many-lines.txt"), "x\n".repeat(50_001));
+  await git("add", "large.txt", "many-lines.txt");
+  await git("commit", "-m", "Add large files");
+
+  await assert.rejects(() => fileBlame(root, { path: "large.txt" }), (error) => {
+    assert.equal(error?.code, "BLAME_TOO_LARGE");
+    assert.equal(error?.details?.reason, "size");
+    return true;
+  });
+  await assert.rejects(() => fileBlame(root, { path: "many-lines.txt" }), (error) => {
+    assert.equal(error?.code, "BLAME_TOO_LARGE");
+    assert.equal(error?.details?.reason, "lines");
+    return true;
+  });
+});

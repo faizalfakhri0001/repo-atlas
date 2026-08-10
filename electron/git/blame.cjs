@@ -13,6 +13,8 @@ const { BlameCache } = require("./blame-cache.cjs");
 
 const DEFAULT_BLAME_TIMEOUT = 30_000;
 const BLAME_SAMPLE_BYTES = 8_192;
+const MAX_BLAME_BYTES = 2 * 1024 * 1024;
+const MAX_BLAME_LINES = 50_000;
 const blameCache = new BlameCache(10);
 
 async function readFileSample(target) {
@@ -35,18 +37,62 @@ async function hasWorkingTreeChanges(repositoryRoot, filePath) {
   return !result.failed && result.stdout.trim().length > 0;
 }
 
+function countTextLines(buffer) {
+  if (!buffer || buffer.length === 0) return 0;
+  const text = buffer.toString("utf8");
+  const matches = text.match(/\r\n|\r|\n/g);
+  const count = (matches?.length ?? 0) + 1;
+  return /(?:\r\n|\r|\n)$/.test(text) ? count - 1 : count;
+}
+
+async function inspectBlameFile(target) {
+  let stats;
+  try {
+    stats = await fs.stat(target);
+  } catch (error) {
+    throw new GitServiceError("The requested file could not be inspected.", "INVALID_PATH", error.message);
+  }
+  if (stats.size > MAX_BLAME_BYTES) {
+    throw new GitServiceError("Blame is disabled for very large files.", "BLAME_TOO_LARGE", {
+      reason: "size",
+      size: stats.size,
+      maxBytes: MAX_BLAME_BYTES,
+      maxLines: MAX_BLAME_LINES,
+    });
+  }
+
+  let buffer;
+  try {
+    buffer = await fs.readFile(target);
+  } catch (error) {
+    throw new GitServiceError("The requested file could not be read.", "FILE_READ_FAILED", error.message);
+  }
+  const lineCount = countTextLines(buffer);
+  if (lineCount > MAX_BLAME_LINES) {
+    throw new GitServiceError("Blame is disabled for very large files.", "BLAME_TOO_LARGE", {
+      reason: "lines",
+      size: stats.size,
+      lineCount,
+      maxBytes: MAX_BLAME_BYTES,
+      maxLines: MAX_BLAME_LINES,
+    });
+  }
+  return { size: stats.size, lineCount, binary: isBinaryBuffer(buffer) };
+}
+
 async function fileBlame(repositoryPath, options = {}) {
   const repository = await resolveRepository(repositoryPath);
   const relativePath = assertRelativePath(options.path);
   const target = await resolveRepositoryFilePath(repository.rootPath, relativePath);
   const revisionInput = options.revision ?? "HEAD";
   const resolvedRevision = await resolveCommit(repository.rootPath, revisionInput);
+  const inspection = await inspectBlameFile(target);
   const workingTreeDirty = await hasWorkingTreeChanges(repository.rootPath, relativePath);
   if (revisionInput === "HEAD") blameCache.invalidateHead(repository.rootPath, resolvedRevision.hash);
   const cached = blameCache.get(repository.rootPath, resolvedRevision.hash, relativePath);
   if (cached) return { ...cached, workingTreeDirty, cached: true };
 
-  if (isBinaryBuffer(await readFileSample(target))) {
+  if (inspection.binary) {
     const binaryResult = {
       path: relativePath,
       revision: resolvedRevision.hash,
@@ -81,8 +127,11 @@ async function fileBlame(repositoryPath, options = {}) {
 module.exports = {
   DEFAULT_BLAME_TIMEOUT,
   BLAME_SAMPLE_BYTES,
+  MAX_BLAME_BYTES,
+  MAX_BLAME_LINES,
   fileBlame,
   blameCache,
   hasWorkingTreeChanges,
+  inspectBlameFile,
   readFileSample,
 };
