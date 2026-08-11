@@ -134,6 +134,10 @@ export function getCurrentSavedViewSnapshot({ activeView, graphRequest, compareI
   if (activeView === "branches" && source.filter && source.filter !== "all" && !config.status) config.status = [String(source.filter)];
   if (activeView === "reflog" && source.action && source.action !== "all" && !config.actions) config.actions = [String(source.action)];
   if (activeView === "hotspots" && source.path && !config.pathPrefix) config.pathPrefix = String(source.path).trim();
+  if (activeView === "activity") {
+    if (!config.range) config.range = "12m";
+    if (!config.metric) config.metric = "commits";
+  }
 
   return {
     viewType: activeView,

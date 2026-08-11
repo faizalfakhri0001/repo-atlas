@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatDate, formatRelativeDate, truncateMiddle } from "@/lib/utils";
 import { HealthSummaryCard } from "@/components/health-card";
+import { ActivityHeatmap } from "@/components/activity-heatmap";
 
 function MetricCard({ icon: Icon, label, value, detail }) {
   return (
@@ -69,7 +70,7 @@ function ActivityChart({ commits }) {
   );
 }
 
-export function Overview({ data, onOpenCommit, onOpenHealth }) {
+export function Overview({ data, repoPath = data?.repository?.rootPath, revision = data?.scannedAt, onOpenCommit, onOpenHealth, onOpenActivity }) {
   const localBranches = data.branches.filter((branch) => !branch.remote);
   const remoteBranches = data.branches.filter((branch) => branch.remote);
   const recent = data.commits.slice(0, 8);
@@ -89,6 +90,10 @@ export function Overview({ data, onOpenCommit, onOpenHealth }) {
       </div>
 
       <HealthSummaryCard repoPath={data.repository.rootPath} revision={data.scannedAt} onOpenDetails={onOpenHealth} />
+
+      <div className="mt-5">
+        <ActivityHeatmap compact repoPath={repoPath} revision={revision} onOpenCommit={onOpenCommit} onOpenActivity={onOpenActivity} />
+      </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)]">
         <Card className="min-w-0">

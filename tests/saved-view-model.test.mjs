@@ -34,3 +34,16 @@ test("saved view model routes supported configurations and detects missing refs"
     tags: [],
   }), ["missing"]);
 });
+
+test("saved view model gives activity a valid default configuration", () => {
+  const current = getCurrentSavedViewSnapshot({ activeView: "activity" });
+  assert.deepEqual(current, {
+    viewType: "activity",
+    configVersion: 1,
+    config: { metric: "commits", range: "12m" },
+  });
+  assert.deepEqual(getSavedViewNavigation({ viewType: "activity", config: current.config }), {
+    view: "activity",
+    payload: { metric: "commits", range: "12m" },
+  });
+});

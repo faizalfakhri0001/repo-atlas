@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   Archive,
+  Activity,
   Bookmark,
   Boxes,
   Cherry,
@@ -46,6 +47,7 @@ import { WorkspaceView } from "@/features/workspace";
 import { FileExplorer } from "@/features/files";
 import { HotspotsView } from "@/features/hotspots";
 import { OwnershipView } from "@/features/ownership";
+import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { HealthView } from "@/features/health";
 import { GlobalSearch } from "@/features/search";
 import { CherryPickDialog } from "@/components/cherry-pick-dialog";
@@ -76,6 +78,7 @@ import { cn, formatRelativeDate, truncateMiddle } from "@/lib/utils";
 const NAV_ITEMS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "health", label: "Health", icon: HeartPulse },
+  { id: "activity", label: "Activity", icon: Activity },
   { id: "commits", label: "Commits", icon: GitCommitHorizontal },
   { id: "reflog", label: "Reflog", icon: HistoryIcon },
   { id: "files", label: "Files", icon: Files },
@@ -410,6 +413,13 @@ export function AppShell({
     [requestNavigationToView],
   );
 
+  const handleActivityConfigChange = useCallback(
+    (config) => {
+      if (activeView === "activity") requestNavigationToView("activity", config);
+    },
+    [activeView, requestNavigationToView],
+  );
+
   return (
     <TooltipProvider delayDuration={350}>
       <div className="flex h-full min-h-0 bg-background text-foreground">
@@ -662,6 +672,7 @@ export function AppShell({
                       onOpenFileAtRevision={(revision, path) => onOpenFileAtRevision?.(revision, path, loadedSession.id)}
                       onOpenPreviousRevision={(revision, path) => onOpenPreviousRevision?.(revision, path, loadedSession.id)}
                       onHealthNavigate={handleHealthNavigation}
+                      onActivityConfigChange={loadedSession.id === selectedSessionId ? handleActivityConfigChange : undefined}
                       onReloadSavedViews={savedViewsState.reload}
                       onOpenSavedView={openSavedView}
                       onRenameSavedView={renameSavedView}
@@ -765,6 +776,7 @@ function ViewHost({
   onOpenFileAtRevision,
   onOpenPreviousRevision,
   onHealthNavigate,
+  onActivityConfigChange,
   onReloadSavedViews,
   onOpenSavedView,
   onRenameSavedView,
@@ -798,7 +810,7 @@ function ViewHost({
       <div className={cn("h-full", view !== "compare" && "hidden")}>
         <CompareView data={data} initial={compareInit} onCherryPick={onCherryPick} />
       </div>
-      {view === "overview" && <Overview data={data} onOpenCommit={onFocusCommit} onOpenHealth={() => onNavigate("health")} />}
+      {view === "overview" && <Overview data={data} repoPath={data.repository.rootPath} revision={revision} onOpenCommit={onFocusCommit} onOpenHealth={() => onNavigate("health")} onOpenActivity={() => onNavigate("activity")} />}
       {view === "branches" && (
         <BranchesView
           repoPath={data.repository.rootPath}
@@ -843,6 +855,7 @@ function ViewHost({
       {view === "hotspots" && <HotspotsView repoPath={data.repository.rootPath} onOpenFileHistory={onOpenFileHistory} initialFilter={hotspotFilter} initialConfig={navigationRequest?.view === "hotspots" ? navigationRequest.payload : null} />}
       {view === "ownership" && <OwnershipView repoPath={data.repository.rootPath} initialConfig={navigationRequest?.view === "ownership" ? navigationRequest.payload : null} />}
       {view === "health" && <HealthView repoPath={data.repository.rootPath} revision={data.scannedAt} onNavigate={onHealthNavigate} />}
+      {view === "activity" && <ActivityHeatmap repoPath={data.repository.rootPath} revision={revision} initialConfig={navigationRequest?.view === "activity" ? navigationRequest.payload : null} onOpenCommit={onFocusCommit} onConfigChange={onActivityConfigChange} />}
       {view === "reflog" && (
         <ReflogView
           repoPath={data.repository.rootPath}
@@ -873,7 +886,6 @@ function ViewHost({
           canCreate={Boolean(currentSavedView)}
         />
       )}
-      {view === "activity" && <SavedViewNotice title="Activity view is not available yet" />}
       {view === "search" && <SavedViewNotice title="Search views open in the repository search dialog" />}
     </>
   );
