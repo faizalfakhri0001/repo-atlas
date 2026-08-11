@@ -18,6 +18,8 @@ const {
   parseUpstreamTrack,
   scanRepository,
   getWorktreeDetails,
+  previewWorktreeCreate,
+  createWorktree,
   listRepositoryFiles,
   parseRepositoryFileList,
   readRepositoryFile,
@@ -198,6 +200,94 @@ test("scanRepository resolves a linked worktree as its own repository context", 
     () => getWorktreeDetails(root, path.join(root, "not-a-worktree")),
     (error) => error?.code === "WORKTREE_NOT_FOUND",
   );
+});
+
+test("worktree creation preview validates modes, refs, targets, and write access", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "repo-atlas-worktree-create-preview-"));
+  const linked = `${root}-feature`;
+  t.after(() => Promise.all([
+    fs.rm(root, { recursive: true, force: true }),
+    fs.rm(linked, { recursive: true, force: true }),
+  ]));
+
+  const git = (...args) => execFileAsync("git", args, { cwd: root, encoding: "utf8" });
+  await git("init", "-b", "main");
+  await git("config", "user.name", "Repo Atlas Test");
+  await git("config", "user.email", "repo-atlas@example.test");
+  await fs.writeFile(path.join(root, "README.md"), "create\n");
+  await git("add", "README.md");
+  await git("commit", "-m", "Initial commit");
+  await git("branch", "feature/demo");
+
+  const target = `${root}-new`;
+  const readOnly = await previewWorktreeCreate(root, {
+    mode: "existing-branch",
+    branch: "feature/demo",
+    targetPath: target,
+  });
+  assert.equal(readOnly.allowed, false);
+  assert.ok(readOnly.blockingReasons.some((reason) => /Safe Write/i.test(reason)));
+
+  const existing = await previewWorktreeCreate(root, {
+    mode: "existing-branch",
+    branch: "feature/demo",
+    targetPath: target,
+  }, { operationMode: "safe-write" });
+  assert.equal(existing.allowed, true);
+  assert.equal(existing.operation.branch, "feature/demo");
+
+  const currentBranch = await previewWorktreeCreate(root, {
+    mode: "existing-branch",
+    branch: "main",
+    targetPath: `${root}-main-copy`,
+  }, { operationMode: "safe-write" });
+  assert.equal(currentBranch.allowed, false);
+  assert.ok(currentBranch.blockingReasons.some((reason) => /already checked out/i.test(reason)));
+
+  const newBranch = await previewWorktreeCreate(root, {
+    mode: "new-branch",
+    newBranch: "feature/new-worktree",
+    startPoint: "main",
+    targetPath: `${root}-new-branch`,
+  }, { operationMode: "safe-write" });
+  assert.equal(newBranch.allowed, true);
+  assert.equal(newBranch.operation.resolvedStartPoint.length, 40);
+
+  const duplicateBranch = await previewWorktreeCreate(root, {
+    mode: "new-branch",
+    newBranch: "feature/demo",
+    startPoint: "main",
+    targetPath: `${root}-duplicate`,
+  }, { operationMode: "safe-write" });
+  assert.equal(duplicateBranch.allowed, false);
+  assert.ok(duplicateBranch.blockingReasons.some((reason) => /already exists/i.test(reason)));
+
+  const detached = await previewWorktreeCreate(root, {
+    mode: "detached",
+    commit: "HEAD",
+    targetPath: `${root}-detached`,
+  }, { operationMode: "safe-write" });
+  assert.equal(detached.allowed, true);
+  assert.equal(detached.operation.resolvedCommit.length, 40);
+
+  await fs.mkdir(path.join(root, "existing"));
+  const existingTarget = await previewWorktreeCreate(root, {
+    mode: "detached",
+    commit: "HEAD",
+    targetPath: path.join(root, "existing"),
+  }, { operationMode: "safe-write" });
+  assert.equal(existingTarget.allowed, false);
+  assert.ok(existingTarget.blockingReasons.some((reason) => /already exists/i.test(reason)));
+
+  const created = await createWorktree(root, {
+    mode: "existing-branch",
+    branch: "feature/demo",
+    targetPath: linked,
+  }, { operationMode: "safe-write" });
+  assert.equal(created.operation.branch, "feature/demo");
+  assert.equal(created.worktree.branch, "feature/demo");
+  assert.equal(created.worktree.exists, true);
+  assert.equal((await fs.stat(linked)).isDirectory(), true);
 });
 
 test("scanRepository reports an initialized submodule without traversing into it", async (t) => {

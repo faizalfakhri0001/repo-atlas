@@ -1379,6 +1379,215 @@ async function getWorktreeDetails(repositoryPath, worktreePath) {
   };
 }
 
+const WORKTREE_CREATE_MODES = new Set(["existing-branch", "new-branch", "detached"]);
+
+function worktreeCreateOperation(mode, targetPath) {
+  return { mode, targetPath };
+}
+
+async function inspectWorktreeTarget(targetInput, worktrees) {
+  const blockingReasons = [];
+  const rawTarget = typeof targetInput === "string" ? targetInput.trim() : "";
+  let targetPath = rawTarget;
+
+  if (!rawTarget || rawTarget.includes("\0") || rawTarget.length > 4096) {
+    blockingReasons.push("A valid absolute target path is required.");
+    return { targetPath, blockingReasons };
+  }
+  if (!path.isAbsolute(rawTarget)) {
+    blockingReasons.push("The worktree target must be an absolute path.");
+    return { targetPath: path.resolve(rawTarget), blockingReasons };
+  }
+
+  targetPath = path.resolve(rawTarget);
+  const parentPath = path.dirname(targetPath);
+  try {
+    const parentStats = await fs.stat(parentPath);
+    if (!parentStats.isDirectory()) blockingReasons.push("The target parent is not a directory.");
+  } catch (error) {
+    blockingReasons.push(error?.code === "ENOENT" ? "The target parent folder does not exist." : "The target parent could not be inspected.");
+  }
+
+  try {
+    await fs.lstat(targetPath);
+    blockingReasons.push("The target path already exists. Choose a new folder name.");
+  } catch (error) {
+    if (error?.code !== "ENOENT") blockingReasons.push("The target path could not be inspected.");
+  }
+
+  for (const worktree of worktrees) {
+    const existingPath = path.resolve(worktree.path);
+    if (isPathInside(existingPath, targetPath)) {
+      blockingReasons.push("The target path is inside an existing Git worktree.");
+      break;
+    }
+  }
+
+  return { targetPath, blockingReasons };
+}
+
+function isPathInside(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+async function resolveLocalBranch(cwd, branch) {
+  const name = assertRefName(branch);
+  const ref = `refs/heads/${name}`;
+  const result = await runGit(cwd, ["show-ref", "--verify", "--quiet", ref], { allowFailure: true });
+  if (result.failed) return null;
+  const resolved = await resolveCommit(cwd, ref);
+  return { name, ref, hash: resolved.hash };
+}
+
+async function readWorktreeEntries(repository) {
+  const result = await runGit(repository.rootPath, ["worktree", "list", "--porcelain"]);
+  const mainPath = path.basename(repository.commonGitDir) === ".git" ? path.dirname(repository.commonGitDir) : "";
+  return decorateWorktrees(parseWorktrees(result.stdout), mainPath);
+}
+
+async function previewWorktreeCreate(repositoryPath, options = {}, { operationMode = "read-only" } = {}) {
+  const repository = await resolveRepository(repositoryPath);
+  const cwd = repository.rootPath;
+  const mode = typeof options.mode === "string" ? options.mode.trim() : "";
+  const operation = worktreeCreateOperation(mode, typeof options.targetPath === "string" ? options.targetPath.trim() : "");
+  const warnings = [];
+  const blockingReasons = [];
+
+  if (!WORKTREE_CREATE_MODES.has(mode)) {
+    blockingReasons.push("Choose an existing branch, a new branch, or a detached HEAD.");
+  }
+
+  const [partialStatus, worktrees] = await Promise.all([
+    readPartialStatus(repository),
+    readWorktreeEntries(repository),
+  ]);
+  const target = await inspectWorktreeTarget(operation.targetPath, worktrees);
+  operation.targetPath = target.targetPath;
+  blockingReasons.push(...target.blockingReasons);
+
+  if (operationMode !== "safe-write") {
+    blockingReasons.push("Enable Safe Write before creating a worktree.");
+  }
+  if (partialStatus.state.inProgress) {
+    blockingReasons.push(`Another Git operation (${partialStatus.state.current}) is already in progress.`);
+  }
+  if (partialStatus.status.files.some((file) => file.conflicted || file.kind === "conflict")) {
+    blockingReasons.push("Resolve the current worktree conflicts before creating another worktree.");
+  } else if (partialStatus.status.files.some((file) => file.kind !== "ignored")) {
+    warnings.push("Uncommitted changes in the current worktree will not be copied to the new worktree.");
+  }
+
+  const checkedOutBranches = new Map(
+    worktrees
+      .filter((worktree) => worktree.branch)
+      .map((worktree) => [worktree.branch, worktree.path]),
+  );
+
+  if (mode === "existing-branch") {
+    try {
+      const branch = assertRefName(options.branch);
+      operation.branch = branch;
+      const localBranch = await resolveLocalBranch(cwd, branch);
+      if (!localBranch) {
+        blockingReasons.push(`Local branch "${branch}" was not found.`);
+      } else {
+        operation.resolvedBranch = localBranch.hash;
+        const checkedOutPath = checkedOutBranches.get(branch);
+        if (checkedOutPath) blockingReasons.push(`Local branch "${branch}" is already checked out at ${checkedOutPath}.`);
+      }
+    } catch (error) {
+      blockingReasons.push(error instanceof GitServiceError ? error.message : "A valid local branch is required.");
+    }
+  }
+
+  if (mode === "new-branch") {
+    try {
+      const newBranch = assertRefName(options.newBranch);
+      operation.newBranch = newBranch;
+      const formatResult = await runGit(cwd, ["check-ref-format", "--branch", newBranch], { allowFailure: true });
+      if (formatResult.failed) {
+        blockingReasons.push(`"${newBranch}" is not a valid new branch name.`);
+      } else {
+        const existing = await runGit(cwd, ["show-ref", "--verify", "--quiet", `refs/heads/${newBranch}`], { allowFailure: true });
+        if (!existing.failed) blockingReasons.push(`Local branch "${newBranch}" already exists.`);
+      }
+
+      const requestedStart = typeof options.startPoint === "string" ? options.startPoint.trim() : "";
+      const startPoint = requestedStart || partialStatus.status.oid || "";
+      operation.startPoint = startPoint;
+      if (!startPoint) {
+        blockingReasons.push("A start point is required for a new branch.");
+      } else {
+        try {
+          operation.resolvedStartPoint = (await resolveCommit(cwd, startPoint)).hash;
+        } catch (error) {
+          blockingReasons.push(error instanceof GitServiceError ? error.message : "The start point does not resolve to a commit.");
+        }
+      }
+    } catch (error) {
+      blockingReasons.push(error instanceof GitServiceError ? error.message : "A valid new branch name is required.");
+    }
+  }
+
+  if (mode === "detached") {
+    const requestedCommit = typeof options.commit === "string" ? options.commit.trim() : "";
+    operation.commit = requestedCommit;
+    if (!requestedCommit) {
+      blockingReasons.push("A commit or ref is required for a detached worktree.");
+    } else {
+      try {
+        operation.resolvedCommit = (await resolveCommit(cwd, requestedCommit)).hash;
+      } catch (error) {
+        blockingReasons.push(error instanceof GitServiceError ? error.message : "The selected commit does not resolve to a commit.");
+      }
+    }
+  }
+
+  return {
+    allowed: blockingReasons.length === 0,
+    operation,
+    warnings: [...new Set(warnings)],
+    blockingReasons: [...new Set(blockingReasons)],
+  };
+}
+
+async function createWorktree(repositoryPath, options = {}, { operationMode = "read-only" } = {}) {
+  assertSafeWriteEnabled(operationMode);
+  const preview = await previewWorktreeCreate(repositoryPath, options, { operationMode });
+  if (!preview.allowed) {
+    throw new GitServiceError(
+      preview.blockingReasons.join(" "),
+      "WORKTREE_CREATE_BLOCKED",
+      JSON.stringify(preview),
+    );
+  }
+
+  const { operation } = preview;
+  let args;
+  if (operation.mode === "existing-branch") {
+    args = ["worktree", "add", "--", operation.targetPath, operation.branch];
+  } else if (operation.mode === "new-branch") {
+    args = ["worktree", "add", "-b", operation.newBranch, "--", operation.targetPath, operation.resolvedStartPoint];
+  } else {
+    args = ["worktree", "add", "--detach", "--", operation.targetPath, operation.resolvedCommit];
+  }
+
+  const repository = await resolveRepository(repositoryPath);
+  const result = await runGit(repository.rootPath, args, { allowFailure: true, timeout: 120_000 });
+  if (result.failed) {
+    throw new GitServiceError(humanizeGitError(result.stderr), "WORKTREE_CREATE_FAILED", result.stderr);
+  }
+
+  const worktrees = await readWorktreeEntries(repository);
+  const createdPath = await fs.realpath(operation.targetPath).catch(() => path.resolve(operation.targetPath));
+  return {
+    operation,
+    worktree: worktrees.find((worktree) => path.resolve(worktree.path) === createdPath) ?? null,
+    worktrees,
+  };
+}
+
 function buildPartialRepository(repository, status, defaultBranchInfo = {}) {
   return {
     ...repository,
@@ -1541,6 +1750,8 @@ module.exports = {
   getRepositoryState,
   scanRepository,
   getWorktreeDetails,
+  previewWorktreeCreate,
+  createWorktree,
   listRepositoryFiles,
   readRepositoryFile,
   listFileHistory,
