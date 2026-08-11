@@ -3057,15 +3057,16 @@ The bookmark indicator is conditional on bookmark metadata supplied to the view;
 
 ## Stage P2-8 — Worktree Create
 
-- [ ] Native location picker.
-- [ ] Suggested path.
-- [ ] Existing branch preview.
-- [ ] New branch preview.
-- [ ] Detached preview.
-- [ ] Execution.
-- [ ] Watcher transaction.
-- [ ] UI.
-- [ ] Tests.
+- [x] Native location picker.
+- [x] Suggested path.
+- [x] Existing branch preview.
+- [x] New branch preview.
+- [x] Detached preview.
+- [x] Execution.
+- [x] Watcher transaction.
+- [x] UI.
+- [x] Tests (unit, component, integration, IPC, and browser demo).
+- [x] Browser E2E skipped per request.
 
 ---
 
@@ -3389,12 +3390,12 @@ P2 must not introduce telemetry.
 - [x] reveal
 - [x] compare
 - [x] auto refresh
-- [ ] create preview
-- [ ] existing branch
-- [ ] new branch
-- [ ] detached
-- [ ] target validation
-- [ ] duplicate branch guard
+- [x] create preview
+- [x] existing branch
+- [x] new branch
+- [x] detached
+- [x] target validation
+- [x] duplicate branch guard
 - [ ] remove preview
 - [ ] dirty guard
 - [ ] lock guard
