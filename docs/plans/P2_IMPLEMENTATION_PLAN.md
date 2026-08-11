@@ -3043,14 +3043,15 @@ The bookmark indicator is conditional on bookmark metadata supplied to the view;
 
 ## Stage P2-7 — Worktree Read Manager
 
-- [ ] Enhanced list.
-- [ ] Details.
-- [ ] Dirty status.
-- [ ] Reveal.
-- [ ] Open as Repo Atlas session.
-- [ ] Compare.
-- [ ] Auto refresh.
-- [ ] Tests.
+- [x] Enhanced list.
+- [x] Details.
+- [x] Dirty status.
+- [x] Reveal.
+- [x] Open as Repo Atlas session.
+- [x] Compare.
+- [x] Auto refresh.
+- [x] Browser E2E skipped per request.
+- [x] Tests (unit, component, integration, and browser demo; browser end-to-end coverage skipped per request).
 
 ---
 
@@ -3382,11 +3383,12 @@ P2 must not introduce telemetry.
 
 ## Worktrees
 
-- [ ] enhanced list
-- [ ] dirty detail
-- [ ] open session
-- [ ] reveal
-- [ ] compare
+- [x] enhanced list
+- [x] dirty detail
+- [x] open session
+- [x] reveal
+- [x] compare
+- [x] auto refresh
 - [ ] create preview
 - [ ] existing branch
 - [ ] new branch
@@ -3445,15 +3447,15 @@ P2 must not introduce telemetry.
 
 ## Quality
 
-- [ ] unit
-- [ ] integration
-- [ ] component
-- [ ] E2E
+- [x] unit
+- [x] integration
+- [x] component
+- [x] Browser E2E skipped per request.
 - [ ] macOS
 - [ ] Windows
 - [ ] Linux
-- [ ] demo
-- [ ] multi-worktree
+- [x] demo
+- [x] multi-worktree
 - [ ] multi-repository
 - [ ] P0 regression
 - [ ] P1 regression
