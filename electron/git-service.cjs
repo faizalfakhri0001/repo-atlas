@@ -26,6 +26,7 @@ const { buildOwnershipReport } = require("./git/analytics/ownership.cjs");
 const { buildHealthReport, parseTrackedFileRows } = require("./git/analytics/health.cjs");
 const { parseBranchRows, resolveDefaultBranch, branchIntelligence } = require("./git/analytics/branches.cjs");
 const { buildWorkspacePatch, parseWorkspacePatch } = require("./git/workspace-operations.cjs");
+const { getCommitReachability, listReflog } = require("./git/reflog.cjs");
 
 const DEFAULT_COMMIT_LIMIT = 1000;
 const MAX_COMMIT_LIMIT = 5000;
@@ -1429,6 +1430,8 @@ module.exports = {
   readFileAtRevision,
   fileBlame,
   listCommits,
+  listReflog,
+  getCommitReachability,
   getCommitDetails,
   getFileDiff,
   analyticsSummary,

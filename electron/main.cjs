@@ -21,6 +21,8 @@ const {
   ownershipSummary,
   repositoryHealth,
   branchIntelligence,
+  listReflog,
+  getCommitReachability,
   stageFiles,
   unstageFiles,
   stageHunk,
@@ -137,6 +139,8 @@ function registerIpcHandlers() {
       return null;
     },
     "commits:list": (payload) => listCommits(payload?.repositoryPath, payload ?? {}),
+    "reflog:list": (payload) => listReflog(payload?.repositoryPath, payload ?? {}),
+    "commit:reachability": (payload) => getCommitReachability(payload?.repositoryPath, payload?.hash),
     "commit:details": (payload) => getCommitDetails(payload?.repositoryPath, payload?.hash),
     "diff:file": (payload) => getFileDiff(payload?.repositoryPath, payload ?? {}),
     "compare:refs": (payload) => compareRefs(payload?.repositoryPath, payload?.base, payload?.head),
