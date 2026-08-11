@@ -12,8 +12,11 @@ test("worktree creation stays behind explicit service and IPC contracts", () => 
 
   assert.equal(typeof service.previewWorktreeCreate, "function");
   assert.equal(typeof service.createWorktree, "function");
+  assert.match(main, /"dialog:choose-worktree-location": async \(payload\) =>/);
+  assert.match(main, /properties: \["openDirectory", "createDirectory"\]/);
   assert.match(main, /"worktree:create-preview": async \(payload\) => previewWorktreeCreate\(/);
   assert.match(main, /"worktree:create": \(payload\) => executeWorkspaceOperation\(payload, \(\{ operationMode \}\) => createWorktree\(/);
+  assert.match(preload, /chooseWorktreeLocation: \(payload\) => ipcRenderer\.invoke\("dialog:choose-worktree-location", payload\)/);
   assert.match(preload, /worktreeCreatePreview: \(payload\) => ipcRenderer\.invoke\("worktree:create-preview", payload\)/);
   assert.match(preload, /worktreeCreate: \(payload\) => ipcRenderer\.invoke\("worktree:create", payload\)/);
   assert.match(main, /watchManager\.beginTransaction\(sessionId\)/);

@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("repoAtlas", {
   openRepository: () => ipcRenderer.invoke("dialog:open-repository"),
   scanRepository: (repositoryPath) => ipcRenderer.invoke("repository:scan", { repositoryPath }),
+  chooseWorktreeLocation: (payload) => ipcRenderer.invoke("dialog:choose-worktree-location", payload),
   worktreeDetails: (payload) => ipcRenderer.invoke("worktree:details", payload),
   worktreeCreatePreview: (payload) => ipcRenderer.invoke("worktree:create-preview", payload),
   worktreeCreate: (payload) => ipcRenderer.invoke("worktree:create", payload),

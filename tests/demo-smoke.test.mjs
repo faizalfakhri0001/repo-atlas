@@ -87,4 +87,14 @@ test("demo mode exposes a complete read-only repository workflow", async () => {
   const hunkAttempt = await api.stageHunk({ repositoryPath, path: "src/app.jsx", hunkId: "demo-hunk" });
   assert.equal(hunkAttempt.ok, false);
   assert.equal(hunkAttempt.error.code, "DEMO_MODE");
+
+  const locationAttempt = await api.chooseWorktreeLocation({ repositoryPath });
+  assert.equal(locationAttempt.ok, false);
+  assert.equal(locationAttempt.error.code, "DEMO_MODE");
+  const createPreviewAttempt = await api.worktreeCreatePreview({ repositoryPath, mode: "detached", targetPath: "/demo/new-worktree", commit: firstCommit.hash });
+  assert.equal(createPreviewAttempt.ok, false);
+  assert.equal(createPreviewAttempt.error.code, "DEMO_MODE");
+  const createAttempt = await api.worktreeCreate({ repositoryPath, mode: "detached", targetPath: "/demo/new-worktree", commit: firstCommit.hash });
+  assert.equal(createAttempt.ok, false);
+  assert.equal(createAttempt.error.code, "DEMO_MODE");
 });

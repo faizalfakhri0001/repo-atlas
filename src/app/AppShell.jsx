@@ -734,6 +734,7 @@ export function AppShell({
                   )}
                   <div className="min-h-0 flex-1">
                     <ViewHost
+                      sessionId={loadedSession.id}
                       view={loadedSession.activeView}
                       data={loadedSession.snapshot}
                       revision={loadedSession.snapshot.scannedAt}
@@ -870,6 +871,7 @@ export function AppShell({
 }
 
 function ViewHost({
+  sessionId,
   view,
   data,
   revision,
@@ -964,11 +966,17 @@ function ViewHost({
       )}
       {view === "worktrees" && (
         <WorktreesView
+          sessionId={sessionId}
           worktrees={data.worktrees}
           repoPath={data.repository.rootPath}
           currentWorktreePath={data.repository.rootPath}
           currentBranch={data.repository.currentBranch}
           defaultBranch={data.repository.defaultBranch}
+          currentHead={data.repository.head}
+          branches={data.branches}
+          operationMode={operationMode}
+          isDemo={isDemo}
+          onSetOperationMode={onSetOperationMode}
           onOpenWorktree={onOpenWorktree}
           onCompare={onCompare}
           onRefresh={onRefresh}

@@ -2,6 +2,7 @@ const path = require("node:path");
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const {
   scanRepository,
+  resolveRepository,
   getWorktreeDetails,
   previewWorktreeCreate,
   createWorktree,
@@ -140,6 +141,17 @@ function registerIpcHandlers() {
   const invokeHandlers = {
     "repository:scan": (payload) => scanRepository(payload?.repositoryPath ?? payload),
     "worktree:details": (payload) => getWorktreeDetails(payload?.repositoryPath, payload?.path),
+    "dialog:choose-worktree-location": async (payload) => {
+      const repository = await resolveRepository(payload?.repositoryPath);
+      const focusedWindow = BrowserWindow.getFocusedWindow();
+      const result = await dialog.showOpenDialog(focusedWindow ?? undefined, {
+        title: "Choose parent folder for worktree",
+        defaultPath: path.dirname(repository.rootPath),
+        properties: ["openDirectory", "createDirectory"],
+        buttonLabel: "Choose Folder",
+      });
+      return result.canceled ? null : result.filePaths[0] ?? null;
+    },
     "worktree:create-preview": async (payload) => previewWorktreeCreate(payload?.repositoryPath, payload ?? {}, {
       operationMode: await preferences.getOperationMode(),
     }),

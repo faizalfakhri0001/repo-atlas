@@ -1312,6 +1312,7 @@ export function createDemoApi() {
     openRepository: () => Promise.resolve("/demo/acme-storefront"),
     revealRepository: () => Promise.resolve({ ok: true }),
     revealRepositoryFile: () => Promise.resolve({ ok: true }),
+    chooseWorktreeLocation: demoWriteError,
     getOperationMode: () => ok({ operationMode: "read-only" }),
     setOperationMode: demoWriteError,
     stageFiles: demoWriteError,
@@ -1319,6 +1320,8 @@ export function createDemoApi() {
     stageHunk: demoWriteError,
     unstageHunk: demoWriteError,
     scanRepository: () => ok(scanData()),
+    worktreeCreatePreview: demoWriteError,
+    worktreeCreate: demoWriteError,
     worktreeDetails: ({ path: requestedPath } = {}) => {
       const worktree = demoWorktrees.find((candidate) => candidate.path === requestedPath);
       if (!worktree) return Promise.resolve({ ok: false, error: { message: "The selected path is not a registered Git worktree.", code: "WORKTREE_NOT_FOUND" } });
