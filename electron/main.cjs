@@ -34,12 +34,14 @@ const {
 } = require("./git-service.cjs");
 const { createPreferencesStore } = require("./preferences.cjs");
 const { createRepositoryMetadataStore } = require("./repository-metadata.cjs");
+const { createLocalMetadataService } = require("./local-metadata.cjs");
 const { createSavedViewService } = require("./saved-views.cjs");
 const { WatchManager } = require("./watch/watch-manager.cjs");
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
 const preferences = createPreferencesStore({ filePath: () => path.join(app.getPath("userData"), "preferences.json") });
 const repositoryMetadata = createRepositoryMetadataStore({ userDataPath: () => app.getPath("userData") });
+const localMetadata = createLocalMetadataService({ store: repositoryMetadata });
 const savedViews = createSavedViewService({ store: repositoryMetadata });
 const watchManager = new WatchManager({
   onChange: (event) => {
@@ -165,6 +167,14 @@ function registerIpcHandlers() {
     "saved-view:create": (payload) => savedViews.createSavedView(payload?.repositoryPath, payload ?? {}),
     "saved-view:update": (payload) => savedViews.updateSavedView(payload?.repositoryPath, payload ?? {}),
     "saved-view:delete": (payload) => savedViews.deleteSavedView(payload?.repositoryPath, payload ?? {}),
+    "bookmark:list": (payload) => localMetadata.listBookmarks(payload?.repositoryPath),
+    "bookmark:create": (payload) => localMetadata.createBookmark(payload?.repositoryPath, payload ?? {}),
+    "bookmark:update": (payload) => localMetadata.updateBookmark(payload?.repositoryPath, payload ?? {}),
+    "bookmark:delete": (payload) => localMetadata.deleteBookmark(payload?.repositoryPath, payload ?? {}),
+    "note:list": (payload) => localMetadata.listNotes(payload?.repositoryPath),
+    "note:create": (payload) => localMetadata.createNote(payload?.repositoryPath, payload ?? {}),
+    "note:update": (payload) => localMetadata.updateNote(payload?.repositoryPath, payload ?? {}),
+    "note:delete": (payload) => localMetadata.deleteNote(payload?.repositoryPath, payload ?? {}),
     "settings:get-operation-mode": async () => ({ operationMode: await preferences.getOperationMode() }),
     "settings:set-operation-mode": async (payload) => ({ operationMode: await preferences.setOperationMode(payload?.mode) }),
     "workspace:stage-files": (payload) => executeWorkspaceOperation(payload, ({ operationMode }) => stageFiles(payload?.repositoryPath, payload?.paths, { operationMode })),

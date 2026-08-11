@@ -6,6 +6,7 @@ import { groupSearchResults, scoreFile, scoreText } from "../features/search/sea
 import { aggregateActivity } from "../features/activity/activity-model.js";
 
 const DEMO_SAVED_VIEWS_STORAGE_KEY = "repo-atlas-demo-metadata-v1";
+const DEMO_LOCAL_METADATA_STORAGE_KEY = "repo-atlas-demo-local-metadata-v1";
 const DEMO_SAVED_VIEW_TYPES = new Set(["commits", "files", "branches", "compare", "hotspots", "ownership", "activity", "reflog", "search"]);
 
 function getDemoStorage() {
@@ -53,6 +54,57 @@ function writeDemoSavedViews(repositoryPath, savedViews) {
     const parsed = JSON.parse(storage.getItem(DEMO_SAVED_VIEWS_STORAGE_KEY) || "{}");
     parsed[repositoryPath] = savedViews.slice(0, 1000);
     storage.setItem(DEMO_SAVED_VIEWS_STORAGE_KEY, JSON.stringify(parsed));
+  } catch {
+    // Demo persistence is best effort; malformed browser storage must not break the preview.
+  }
+}
+
+function normalizeDemoBookmark(value) {
+  if (!value || typeof value !== "object") return null;
+  const commitHash = typeof value.commitHash === "string" ? value.commitHash.trim().toLowerCase() : "";
+  if (!/^[0-9a-f]{7,64}$/.test(commitHash) || typeof value.id !== "string" || !value.id.trim()) return null;
+  const label = typeof value.label === "string" && value.label.trim() ? value.label.trim().slice(0, 120) : null;
+  const category = typeof value.category === "string" && value.category.trim() ? value.category.trim().slice(0, 60) : null;
+  const createdAt = typeof value.createdAt === "string" ? value.createdAt : new Date().toISOString();
+  const updatedAt = typeof value.updatedAt === "string" ? value.updatedAt : createdAt;
+  return { id: value.id.trim().slice(0, 200), commitHash, label, category, createdAt, updatedAt };
+}
+
+function normalizeDemoNote(value) {
+  if (!value || typeof value !== "object" || value.targetType !== "commit") return null;
+  const targetId = typeof value.targetId === "string" ? value.targetId.trim().toLowerCase() : "";
+  if (!/^[0-9a-f]{7,64}$/.test(targetId) || typeof value.id !== "string" || !value.id.trim() || typeof value.body !== "string" || value.body.length > 10_000) return null;
+  const title = typeof value.title === "string" && value.title.trim() ? value.title.trim().slice(0, 120) : undefined;
+  const createdAt = typeof value.createdAt === "string" ? value.createdAt : new Date().toISOString();
+  const updatedAt = typeof value.updatedAt === "string" ? value.updatedAt : createdAt;
+  return { id: value.id.trim().slice(0, 200), targetType: "commit", targetId, ...(title ? { title } : {}), body: value.body, createdAt, updatedAt };
+}
+
+function readDemoLocalMetadata(repositoryPath) {
+  const storage = getDemoStorage();
+  if (!storage) return { bookmarks: [], notes: [] };
+  try {
+    const parsed = JSON.parse(storage.getItem(DEMO_LOCAL_METADATA_STORAGE_KEY) || "{}");
+    const entry = parsed?.[repositoryPath] ?? {};
+    return {
+      bookmarks: Array.isArray(entry.bookmarks) ? entry.bookmarks.slice(0, 1000).map(normalizeDemoBookmark).filter(Boolean) : [],
+      notes: Array.isArray(entry.notes) ? entry.notes.slice(0, 1000).map(normalizeDemoNote).filter(Boolean) : [],
+    };
+  } catch {
+    return { bookmarks: [], notes: [] };
+  }
+}
+
+function writeDemoLocalMetadata(repositoryPath, metadata) {
+  const storage = getDemoStorage();
+  if (!storage) return;
+  try {
+    const parsed = JSON.parse(storage.getItem(DEMO_LOCAL_METADATA_STORAGE_KEY) || "{}");
+    parsed[repositoryPath] = {
+      bookmarks: metadata.bookmarks.slice(0, 1000),
+      notes: metadata.notes.slice(0, 1000),
+    };
+    storage.setItem(DEMO_LOCAL_METADATA_STORAGE_KEY, JSON.stringify(parsed));
   } catch {
     // Demo persistence is best effort; malformed browser storage must not break the preview.
   }
@@ -1186,10 +1238,30 @@ export function createDemoApi() {
   const demoRepositoryPath = "/demo/acme-storefront";
   let demoSavedViews = readDemoSavedViews(demoRepositoryPath);
   let demoSavedViewSequence = 0;
+  let demoLocalMetadata = readDemoLocalMetadata(demoRepositoryPath);
+  let demoLocalMetadataSequence = 0;
   const savedViewError = (message, code = "SAVED_VIEW_INVALID") =>
     Promise.resolve({ ok: false, error: { message, code } });
+  const localMetadataError = (message, code = "LOCAL_METADATA_INVALID") =>
+    Promise.resolve({ ok: false, error: { message, code } });
   const saveDemoViews = () => writeDemoSavedViews(demoRepositoryPath, demoSavedViews);
+  const saveDemoLocalMetadata = () => writeDemoLocalMetadata(demoRepositoryPath, demoLocalMetadata);
   const findDemoSavedView = (id) => demoSavedViews.find((view) => view.id === id);
+  const findDemoBookmark = (id) => demoLocalMetadata.bookmarks.find((bookmark) => bookmark.id === id);
+  const findDemoNote = (id) => demoLocalMetadata.notes.find((note) => note.id === id);
+  const resolveDemoCommitHash = (value) => {
+    const commit = byHash.get(resolveTip(value));
+    if (!commit) throw new Error("The selected commit could not be found in the demo repository.");
+    return commit.hash;
+  };
+  const optionalLocalText = (value, field, maximum) => {
+    if (value === undefined || value === null || value === "") return null;
+    if (typeof value !== "string" || value.includes("\0")) throw new Error(`${field} must be a string.`);
+    const normalized = value.trim();
+    if (!normalized) return null;
+    if (normalized.length > maximum) throw new Error(`${field} must contain at most ${maximum} characters.`);
+    return normalized;
+  };
   const validateDemoSavedViewInput = (input = {}, { requireId = false } = {}) => {
     const name = typeof input.name === "string" ? input.name.trim() : "";
     if (!name || name.length > 80) throw new Error("Saved view names must contain between 1 and 80 characters.");
@@ -1269,6 +1341,88 @@ export function createDemoApi() {
       demoSavedViews = demoSavedViews.filter((view) => view.id !== current.id);
       saveDemoViews();
       return ok({ repositoryId: "demo-repository", deletedId: current.id, savedViews: cloneDemoValue(demoSavedViews) });
+    },
+    listBookmarks: () => ok({ repositoryId: "demo-repository", bookmarks: cloneDemoValue(demoLocalMetadata.bookmarks), source: "demo", warning: null }),
+    createBookmark: (input = {}) => {
+      try {
+        if (demoLocalMetadata.bookmarks.length >= 1000) throw new Error("The bookmark limit has been reached.");
+        const commitHash = resolveDemoCommitHash(input.commitHash);
+        const label = optionalLocalText(input.label, "Bookmark label", 120);
+        const category = optionalLocalText(input.category, "Bookmark category", 60);
+        const id = typeof input.id === "string" && input.id.trim() ? input.id.trim().slice(0, 200) : `demo-bookmark-${Date.now().toString(36)}-${(++demoLocalMetadataSequence).toString(36)}`;
+        if (findDemoBookmark(id)) throw new Error("A bookmark with this ID already exists.");
+        const timestamp = new Date().toISOString();
+        const bookmark = { id, commitHash, label, category, createdAt: timestamp, updatedAt: timestamp };
+        demoLocalMetadata = { ...demoLocalMetadata, bookmarks: [...demoLocalMetadata.bookmarks, bookmark] };
+        saveDemoLocalMetadata();
+        return ok({ repositoryId: "demo-repository", bookmark: cloneDemoValue(bookmark), bookmarks: cloneDemoValue(demoLocalMetadata.bookmarks), source: "demo", warning: null });
+      } catch (error) {
+        return localMetadataError(error?.message ?? "Bookmark could not be created.", error?.message?.includes("commit") ? "COMMIT_NOT_FOUND" : undefined);
+      }
+    },
+    updateBookmark: (input = {}) => {
+      const current = findDemoBookmark(input.id);
+      if (!current) return localMetadataError("Bookmark was not found.", "LOCAL_METADATA_NOT_FOUND");
+      try {
+        const commitHash = Object.prototype.hasOwnProperty.call(input, "commitHash") ? resolveDemoCommitHash(input.commitHash) : current.commitHash;
+        const label = Object.prototype.hasOwnProperty.call(input, "label") ? optionalLocalText(input.label, "Bookmark label", 120) : current.label;
+        const category = Object.prototype.hasOwnProperty.call(input, "category") ? optionalLocalText(input.category, "Bookmark category", 60) : current.category;
+        const bookmark = { ...current, commitHash, label, category, updatedAt: new Date().toISOString() };
+        demoLocalMetadata = { ...demoLocalMetadata, bookmarks: demoLocalMetadata.bookmarks.map((candidate) => candidate.id === current.id ? bookmark : candidate) };
+        saveDemoLocalMetadata();
+        return ok({ repositoryId: "demo-repository", bookmark: cloneDemoValue(bookmark), bookmarks: cloneDemoValue(demoLocalMetadata.bookmarks), source: "demo", warning: null });
+      } catch (error) {
+        return localMetadataError(error?.message ?? "Bookmark could not be updated.", error?.message?.includes("commit") ? "COMMIT_NOT_FOUND" : undefined);
+      }
+    },
+    deleteBookmark: (input = {}) => {
+      const current = findDemoBookmark(input.id);
+      if (!current) return localMetadataError("Bookmark was not found.", "LOCAL_METADATA_NOT_FOUND");
+      demoLocalMetadata = { ...demoLocalMetadata, bookmarks: demoLocalMetadata.bookmarks.filter((bookmark) => bookmark.id !== current.id) };
+      saveDemoLocalMetadata();
+      return ok({ repositoryId: "demo-repository", deletedId: current.id, bookmarks: cloneDemoValue(demoLocalMetadata.bookmarks), source: "demo", warning: null });
+    },
+    listNotes: () => ok({ repositoryId: "demo-repository", notes: cloneDemoValue(demoLocalMetadata.notes), source: "demo", warning: null }),
+    createNote: (input = {}) => {
+      try {
+        if (demoLocalMetadata.notes.length >= 1000) throw new Error("The note limit has been reached.");
+        const targetId = resolveDemoCommitHash(input.targetId);
+        if (typeof input.body !== "string" || input.body.includes("\0") || input.body.length > 10_000) throw new Error("Note body must contain at most 10000 characters.");
+        const title = optionalLocalText(input.title, "Note title", 120);
+        const id = typeof input.id === "string" && input.id.trim() ? input.id.trim().slice(0, 200) : `demo-note-${Date.now().toString(36)}-${(++demoLocalMetadataSequence).toString(36)}`;
+        if (findDemoNote(id)) throw new Error("A note with this ID already exists.");
+        const timestamp = new Date().toISOString();
+        const note = { id, targetType: "commit", targetId, ...(title ? { title } : {}), body: input.body, createdAt: timestamp, updatedAt: timestamp };
+        demoLocalMetadata = { ...demoLocalMetadata, notes: [...demoLocalMetadata.notes, note] };
+        saveDemoLocalMetadata();
+        return ok({ repositoryId: "demo-repository", note: cloneDemoValue(note), notes: cloneDemoValue(demoLocalMetadata.notes), source: "demo", warning: null });
+      } catch (error) {
+        return localMetadataError(error?.message ?? "Note could not be created.", error?.message?.includes("commit") ? "COMMIT_NOT_FOUND" : undefined);
+      }
+    },
+    updateNote: (input = {}) => {
+      const current = findDemoNote(input.id);
+      if (!current) return localMetadataError("Note was not found.", "LOCAL_METADATA_NOT_FOUND");
+      try {
+        const targetId = Object.prototype.hasOwnProperty.call(input, "targetId") ? resolveDemoCommitHash(input.targetId) : current.targetId;
+        const body = Object.prototype.hasOwnProperty.call(input, "body") ? input.body : current.body;
+        if (typeof body !== "string" || body.includes("\0") || body.length > 10_000) throw new Error("Note body must contain at most 10000 characters.");
+        const title = Object.prototype.hasOwnProperty.call(input, "title") ? optionalLocalText(input.title, "Note title", 120) : current.title;
+        const note = { ...current, targetId, ...(title ? { title } : {}), ...(title ? {} : { title: undefined }), body, updatedAt: new Date().toISOString() };
+        if (!note.title) delete note.title;
+        demoLocalMetadata = { ...demoLocalMetadata, notes: demoLocalMetadata.notes.map((candidate) => candidate.id === current.id ? note : candidate) };
+        saveDemoLocalMetadata();
+        return ok({ repositoryId: "demo-repository", note: cloneDemoValue(note), notes: cloneDemoValue(demoLocalMetadata.notes), source: "demo", warning: null });
+      } catch (error) {
+        return localMetadataError(error?.message ?? "Note could not be updated.", error?.message?.includes("commit") ? "COMMIT_NOT_FOUND" : undefined);
+      }
+    },
+    deleteNote: (input = {}) => {
+      const current = findDemoNote(input.id);
+      if (!current) return localMetadataError("Note was not found.", "LOCAL_METADATA_NOT_FOUND");
+      demoLocalMetadata = { ...demoLocalMetadata, notes: demoLocalMetadata.notes.filter((note) => note.id !== current.id) };
+      saveDemoLocalMetadata();
+      return ok({ repositoryId: "demo-repository", deletedId: current.id, notes: cloneDemoValue(demoLocalMetadata.notes), source: "demo", warning: null });
     },
     listReflog: ({ ref = "HEAD", limit = 200, skip = 0 } = {}) => {
       const normalizedRef = ref === "HEAD" ? "HEAD" : String(ref).replace(/^refs\/heads\//, "");
