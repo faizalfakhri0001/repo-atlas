@@ -1,5 +1,5 @@
 const REFRESH_PLANS = Object.freeze({
-  worktree: Object.freeze({ parts: Object.freeze(["status"]), invalidates: Object.freeze([]) }),
+  worktree: Object.freeze({ parts: Object.freeze(["status", "worktrees"]), invalidates: Object.freeze([]) }),
   index: Object.freeze({ parts: Object.freeze(["status"]), invalidates: Object.freeze([]) }),
   head: Object.freeze({ parts: Object.freeze(["head"]), invalidates: Object.freeze(["blame-head", "search-commits"]) }),
   refs: Object.freeze({ parts: Object.freeze(["refs"]), invalidates: Object.freeze(["analytics", "branch-intelligence", "health"]) }),

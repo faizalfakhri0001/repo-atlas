@@ -41,6 +41,12 @@ test("refreshRepositoryPartial returns only requested status and ref sections", 
   assert.ok(refs.invalidated.includes("analytics"));
   assert.equal(analyticsCache.get(`partial-refs-${root}`), undefined);
 
+  const worktrees = await refreshRepositoryPartial(root, ["worktrees"]);
+  assert.deepEqual(Object.keys(worktrees.data).sort(), ["scannedAt", "worktrees"]);
+  assert.equal(worktrees.data.worktrees.length, 1);
+  assert.equal(worktrees.data.worktrees[0].main, true);
+  assert.equal(worktrees.data.worktrees[0].exists, true);
+
   blameCache.set(canonicalRoot, "stale-head", "app.js", { value: "old" });
   const head = await refreshRepositoryPartial(root, ["head"]);
   assert.ok(Array.isArray(head.data.commits));

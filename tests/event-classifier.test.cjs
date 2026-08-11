@@ -7,6 +7,7 @@ test("classifyGitPath maps metadata and operation paths to safe event kinds", ()
   assert.equal(classifyGitPath("index"), "index");
   assert.equal(classifyGitPath("refs/heads/main"), "refs");
   assert.equal(classifyGitPath("packed-refs"), "refs");
+  assert.equal(classifyGitPath("worktrees/linked/HEAD"), "worktree");
   assert.equal(classifyGitPath("rebase-merge/git-rebase-todo"), "operation-state");
   assert.equal(classifyGitPath("objects/pack/pack-a.idx"), null);
 });

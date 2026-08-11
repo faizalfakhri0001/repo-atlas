@@ -32,6 +32,8 @@ function isRelevantGitPath(gitDir, candidate) {
     relative === "HEAD" ||
     relative === "index" ||
     relative === "packed-refs" ||
+    relative === "worktrees" ||
+    relative.startsWith("worktrees/") ||
     relative === "CHERRY_PICK_HEAD" ||
     relative === "MERGE_HEAD" ||
     relative === "REVERT_HEAD" ||

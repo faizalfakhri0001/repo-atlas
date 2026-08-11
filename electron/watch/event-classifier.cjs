@@ -36,6 +36,7 @@ function classifyGitPath(relativeGitPath) {
   if (relative === "HEAD") return "head";
   if (relative === "index") return "index";
   if (relative === "packed-refs" || relative.startsWith("refs/")) return "refs";
+  if (relative === "worktrees" || relative.startsWith("worktrees/")) return "worktree";
   if (OPERATION_NAMES.has(relative) || relative.startsWith("rebase-merge/") || relative.startsWith("rebase-apply/") || relative.startsWith("sequencer/")) {
     return "operation-state";
   }

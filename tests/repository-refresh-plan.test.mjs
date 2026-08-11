@@ -3,7 +3,7 @@ import test from "node:test";
 import { getRepositoryRefreshPlan, mergeRepositoryRefreshPlans } from "../src/app/repository-refresh-plan.js";
 
 test("repository refresh plans keep worktree changes targeted", () => {
-  assert.deepEqual(getRepositoryRefreshPlan("worktree"), { parts: ["status"], invalidates: [] });
+  assert.deepEqual(getRepositoryRefreshPlan("worktree"), { parts: ["status", "worktrees"], invalidates: [] });
   assert.deepEqual(getRepositoryRefreshPlan("index"), { parts: ["status"], invalidates: [] });
   assert.deepEqual(getRepositoryRefreshPlan("head"), { parts: ["head"], invalidates: ["blame-head", "search-commits"] });
 });
