@@ -54,4 +54,31 @@ describe("GlobalSearch", () => {
     pending.get("old")?.(response([{ type: "file", path: "old-result.js", name: "old-result.js", score: 900 }]));
     await waitFor(() => expect(screen.queryByRole("option", { name: /old-result\.js/ })).not.toBeInTheDocument());
   });
+
+  it("searches local metadata categories without invoking repository search", async () => {
+    const user = userEvent.setup();
+    render(
+      <GlobalSearch
+        open
+        onOpenChange={vi.fn()}
+        repositoryPath="/repo"
+        revision={{ head: "c".repeat(40) }}
+        localMetadata={{
+          bookmarks: [{ id: "bookmark-1", commitHash: "d".repeat(40), label: "Release baseline", category: "release" }],
+          notes: [{ id: "note-1", targetType: "commit", targetId: "d".repeat(40), title: "Retry context", body: "Keep the retry details here." }],
+          savedViews: [{ id: "view-1", name: "Release review", viewType: "commits", config: { search: "release" } }],
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Bookmarks" }));
+    await user.type(screen.getByRole("textbox", { name: "Search repository" }), "release");
+    expect(await screen.findByRole("option", { name: /Release baseline/ })).toBeInTheDocument();
+    expect(repositorySearch).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("tab", { name: "Local Notes" }));
+    await user.clear(screen.getByRole("textbox", { name: "Search repository" }));
+    await user.type(screen.getByRole("textbox", { name: "Search repository" }), "retry");
+    expect(await screen.findByRole("option", { name: /Retry context/ })).toBeInTheDocument();
+  });
 });

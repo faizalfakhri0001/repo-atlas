@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { isHashLike, parseSearchQuery, searchTypesForQuery } from "./query-parser.js";
 import { SearchCache } from "./search-cache.js";
 import { groupSearchResults } from "./search-scoring.js";
+import { buildLocalMetadataRevisionKey, buildLocalMetadataSearchResults, LOCAL_SEARCH_TYPES } from "./local-search.js";
 
 export const SEARCH_CATEGORIES = [
   { id: "all", label: "All" },
@@ -11,21 +12,26 @@ export const SEARCH_CATEGORIES = [
   { id: "branch", label: "Branches" },
   { id: "tag", label: "Tags" },
   { id: "author", label: "Authors" },
+  { id: "bookmark", label: "Bookmarks" },
+  { id: "note", label: "Local Notes" },
+  { id: "saved-view", label: "Saved Views" },
 ];
 
 const DEBOUNCE_MS = 150;
+const EMPTY_LOCAL_METADATA = Object.freeze({ bookmarks: [], notes: [], savedViews: [] });
 
-function buildRevisionKey(repositoryPath, revision) {
+function buildRevisionKey(repositoryPath, revision, localMetadata) {
   const head = revision?.head || revision?.shortHead || "";
   const scannedAt = revision?.scannedAt || "";
-  return `${repositoryPath || "demo"}:${head}:${scannedAt}`;
+  const localRevision = buildLocalMetadataRevisionKey(localMetadata);
+  return `${repositoryPath || "demo"}:${head}:${scannedAt}:${localRevision}`;
 }
 
 function emptyGrouped() {
   return groupSearchResults([]);
 }
 
-export function useGlobalSearch({ repositoryPath, revision, open = false, initialQuery = "" } = {}) {
+export function useGlobalSearch({ repositoryPath, revision, open = false, initialQuery = "", localMetadata = {} } = {}) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -33,7 +39,15 @@ export function useGlobalSearch({ repositoryPath, revision, open = false, initia
   const cacheRef = useRef(new SearchCache(30));
   const requestIdRef = useRef(0);
   const timerRef = useRef(null);
-  const revisionKey = buildRevisionKey(repositoryPath, revision);
+  const stableLocalMetadata = useMemo(
+    () => ({
+      bookmarks: Array.isArray(localMetadata?.bookmarks) ? localMetadata.bookmarks : EMPTY_LOCAL_METADATA.bookmarks,
+      notes: Array.isArray(localMetadata?.notes) ? localMetadata.notes : EMPTY_LOCAL_METADATA.notes,
+      savedViews: Array.isArray(localMetadata?.savedViews) ? localMetadata.savedViews : EMPTY_LOCAL_METADATA.savedViews,
+    }),
+    [localMetadata?.bookmarks, localMetadata?.notes, localMetadata?.savedViews],
+  );
+  const revisionKey = buildRevisionKey(repositoryPath, revision, stableLocalMetadata);
 
   useEffect(() => {
     cacheRef.current.setRevision(revisionKey);
@@ -68,6 +82,8 @@ export function useGlobalSearch({ repositoryPath, revision, open = false, initia
       }
 
       const types = searchTypesForQuery(parsed, nextCategory);
+      const localTypes = Array.isArray(types) ? types.filter((type) => LOCAL_SEARCH_TYPES.includes(type)) : LOCAL_SEARCH_TYPES;
+      const repositoryTypes = Array.isArray(types) ? types.filter((type) => !LOCAL_SEARCH_TYPES.includes(type)) : undefined;
       const cacheKey = `${nextCategory}:${nextQuery.trim()}`;
       const cached = cacheRef.current.get(cacheKey, revisionKey);
       if (cached) {
@@ -78,19 +94,27 @@ export function useGlobalSearch({ repositoryPath, revision, open = false, initia
 
       setState((current) => ({ ...current, loading: true, error: null, errors: parsed.errors }));
       try {
-        const response = await api.repositorySearch({
-          repositoryPath,
-          query: nextQuery,
-          types,
-          limit: 100,
+        const localResults = buildLocalMetadataSearchResults({
+          query: trimmed,
+          types: localTypes,
+          ...stableLocalMetadata,
         });
+        const shouldSearchRepository = repositoryTypes === undefined || repositoryTypes.length > 0;
+        const response = shouldSearchRepository && typeof api.repositorySearch === "function"
+          ? await api.repositorySearch({
+            repositoryPath,
+            query: nextQuery,
+            types: repositoryTypes,
+            limit: 100,
+          })
+          : { ok: true, data: { results: [], errors: [], durationMs: null } };
         if (requestId !== requestIdRef.current) return;
         if (!response?.ok) {
           setState((current) => ({ ...current, loading: false, error: response?.error?.message ?? "Repository search failed." }));
           return;
         }
         const data = response.data ?? {};
-        const grouped = groupSearchResults(data.results ?? [], { limitPerType: 20, limit: 100 });
+        const grouped = groupSearchResults([...(data.results ?? []), ...localResults], { limitPerType: 20, limit: 100 });
         const value = { grouped, errors: data.errors ?? parsed.errors, durationMs: data.durationMs ?? null };
         cacheRef.current.set(cacheKey, value, revisionKey);
         setState({ loading: false, error: null, errors: value.errors, grouped, durationMs: value.durationMs });
@@ -99,7 +123,7 @@ export function useGlobalSearch({ repositoryPath, revision, open = false, initia
         setState((current) => ({ ...current, loading: false, error: error?.message ?? "Repository search failed." }));
       }
     },
-    [repositoryPath, revisionKey],
+    [repositoryPath, revisionKey, stableLocalMetadata],
   );
 
   useEffect(() => {

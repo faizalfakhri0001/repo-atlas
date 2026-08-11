@@ -24,6 +24,7 @@ test("accepts valid date bounds and selected result type", () => {
   assert.equal(query.before, "2026-08-01");
   assert.deepEqual(searchTypesForQuery(query, "file"), ["file"]);
   assert.equal(searchTypesForQuery(parseSearchQuery("login")), undefined);
+  assert.deepEqual(searchTypesForQuery(parseSearchQuery("type:bookmark release")), ["bookmark"]);
 });
 
 test("recognizes only hash-like values with seven to forty hex characters", () => {

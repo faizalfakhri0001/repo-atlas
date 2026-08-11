@@ -1,4 +1,4 @@
-const CATEGORY_ORDER = ["file", "commit", "branch", "tag", "author"];
+const CATEGORY_ORDER = ["file", "commit", "branch", "tag", "author", "bookmark", "note", "saved-view"];
 
 function normalize(value) {
   return String(value ?? "").trim().toLocaleLowerCase();
@@ -72,11 +72,14 @@ export function scoreSearchResult(result, query) {
     );
   }
   if (result.type === "author") return Math.max(scoreText(result.name, query), scoreText(result.email, query));
+  if (result.type === "bookmark") return Math.max(scoreText(result.hash, query), scoreText(result.shortHash, query), scoreText(result.label, query), scoreText(result.category, query));
+  if (result.type === "note") return Math.max(scoreText(result.hash, query), scoreText(result.shortHash, query), scoreText(result.title, query), scoreText(result.body, query));
+  if (result.type === "saved-view") return Math.max(scoreText(result.name, query), scoreText(result.viewType, query), scoreText(result.configSummary, query));
   return scoreText(result.name, query);
 }
 
 function resultName(result) {
-  return normalize(result?.path || result?.name || result?.subject || result?.hash);
+  return normalize(result?.path || result?.name || result?.label || result?.title || result?.subject || result?.hash);
 }
 
 export function groupSearchResults(results = [], { limitPerType = 20, limit = 100 } = {}) {

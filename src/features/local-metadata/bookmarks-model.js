@@ -1,4 +1,4 @@
-import { normalizeCommitHash, normalizeBookmarks, normalizeNotes } from "./local-metadata-model";
+import { normalizeCommitHash, normalizeBookmarks, normalizeNotes } from "./local-metadata-model.js";
 
 export const LOCAL_SEARCH_SNIPPET_LENGTH = 120;
 

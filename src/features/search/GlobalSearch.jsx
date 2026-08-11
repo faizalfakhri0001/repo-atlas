@@ -7,6 +7,9 @@ import {
   GitBranch,
   GitCommitHorizontal,
   LoaderCircle,
+  MessageSquare,
+  Star,
+  Bookmark,
   Search,
   Tag,
   UserRound,
@@ -22,6 +25,9 @@ const ICONS = {
   branch: GitBranch,
   tag: Tag,
   author: UserRound,
+  bookmark: Star,
+  note: MessageSquare,
+  "saved-view": Bookmark,
 };
 
 const LABELS = {
@@ -30,11 +36,16 @@ const LABELS = {
   branch: "Branch",
   tag: "Tag",
   author: "Author",
+  bookmark: "Bookmark",
+  note: "Local Note",
+  "saved-view": "Saved View",
 };
 
 function resultTitle(result) {
   if (result.type === "file") return result.path;
   if (result.type === "commit") return result.subject || result.shortHash || result.hash;
+  if (result.type === "bookmark") return result.label || result.shortHash || result.hash;
+  if (result.type === "note") return result.title || "Local note";
   return result.name;
 }
 
@@ -43,6 +54,9 @@ function resultDetails(result) {
   if (result.type === "commit") return `${result.shortHash} · ${result.author || "Unknown author"}`;
   if (result.type === "author") return `${result.email} · ${Number(result.commits ?? 0).toLocaleString()} commits`;
   if (result.type === "branch") return `${result.current ? "Current branch" : result.remote ? "Remote branch" : "Local branch"} · ${result.hash?.slice(0, 8) ?? ""}`;
+  if (result.type === "bookmark") return `${result.shortHash}${result.category ? ` · ${result.category}` : ""}${result.date ? ` · ${result.date.slice(0, 10)}` : ""}`;
+  if (result.type === "note") return `${result.shortHash}${result.date ? ` · ${result.date.slice(0, 10)}` : ""}`;
+  if (result.type === "saved-view") return `${result.viewType || "Saved view"}${result.date ? ` · ${result.date.slice(0, 10)}` : ""}`;
   return `${result.hash?.slice(0, 8) ?? ""}${result.date ? ` · ${result.date.slice(0, 10)}` : ""}`;
 }
 
@@ -79,9 +93,10 @@ export function GlobalSearch({
   initialQuery = "",
   repositoryPath,
   revision,
+  localMetadata = {},
   onOpenResult,
 }) {
-  const search = useGlobalSearch({ repositoryPath, revision, open, initialQuery });
+  const search = useGlobalSearch({ repositoryPath, revision, open, initialQuery, localMetadata });
   const itemRefs = useRef(new Map());
 
   useEffect(() => {
@@ -138,7 +153,7 @@ export function GlobalSearch({
       <DialogContent className="max-w-3xl gap-0 p-0" hideClose>
         <DialogTitle className="sr-only">Search repository</DialogTitle>
         <DialogDescription className="sr-only">
-          Search files, commits, branches, tags, authors, and commit hashes in the current repository.
+          Search files, commits, branches, tags, authors, bookmarks, local notes, saved views, and commit hashes in the current repository.
         </DialogDescription>
         <div role="search" className="flex items-center gap-2 border-b border-border px-4">
           <Search className="size-4 shrink-0 text-muted-foreground" />
@@ -147,7 +162,7 @@ export function GlobalSearch({
             value={search.query}
             onChange={(event) => search.updateQuery(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search files, commits, branches, tags, authors…"
+            placeholder="Search files, commits, branches, tags, bookmarks, notes…"
             aria-label="Search repository"
             aria-controls="repository-search-results"
             aria-activedescendant={search.results.length ? `repository-search-result-${search.selectedIndex}` : undefined}
