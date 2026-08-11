@@ -157,6 +157,25 @@ async function decorateWorktrees(worktrees, mainPath = "") {
   );
 }
 
+async function canonicalizePossiblyMissingPath(candidatePath) {
+  const original = path.resolve(String(candidatePath ?? ""));
+  let current = original;
+  const missingParts = [];
+
+  while (true) {
+    try {
+      const resolved = await fs.realpath(current);
+      return path.join(resolved, ...missingParts.reverse());
+    } catch (error) {
+      if (error?.code !== "ENOENT") return original;
+      const parent = path.dirname(current);
+      if (parent === current) return original;
+      missingParts.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
 function parseSubmoduleConfig(pathRaw, urlRaw) {
   const byName = new Map();
   for (const line of pathRaw.split("\n").filter(Boolean)) {
@@ -1350,8 +1369,11 @@ async function getWorktreeDetails(repositoryPath, worktreePath) {
   const listedResult = await runGit(repository.rootPath, ["worktree", "list", "--porcelain"]);
   const mainPath = path.basename(repository.commonGitDir) === ".git" ? path.dirname(repository.commonGitDir) : "";
   const worktrees = await decorateWorktrees(parseWorktrees(listedResult.stdout), mainPath);
-  const requestedPath = await fs.realpath(path.resolve(worktreePath)).catch(() => path.resolve(worktreePath));
-  const worktree = worktrees.find((candidate) => path.resolve(candidate.path) === requestedPath);
+  const requestedPath = await canonicalizePossiblyMissingPath(worktreePath);
+  const worktree = (await Promise.all(worktrees.map(async (candidate) => ({
+    candidate,
+    comparablePath: await canonicalizePossiblyMissingPath(candidate.path),
+  })))).find(({ comparablePath }) => comparablePath === requestedPath)?.candidate;
   if (!worktree) {
     throw new GitServiceError("The selected path is not a registered Git worktree.", "WORKTREE_NOT_FOUND");
   }
@@ -1594,8 +1616,12 @@ function removeBlock(code, message) {
 
 async function findListedWorktree(worktrees, worktreePath) {
   if (typeof worktreePath !== "string" || worktreePath.trim().length === 0 || worktreePath.includes("\0")) return null;
-  const requestedPath = await fs.realpath(path.resolve(worktreePath)).catch(() => path.resolve(worktreePath));
-  return worktrees.find((worktree) => path.resolve(worktree.path) === requestedPath) ?? null;
+  const requestedPath = await canonicalizePossiblyMissingPath(worktreePath);
+  const matches = await Promise.all(worktrees.map(async (worktree) => ({
+    worktree,
+    comparablePath: await canonicalizePossiblyMissingPath(worktree.path),
+  })));
+  return matches.find(({ comparablePath }) => comparablePath === requestedPath)?.worktree ?? null;
 }
 
 async function readWorktreeStatus(worktree) {
