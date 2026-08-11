@@ -51,6 +51,7 @@ import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { HealthView } from "@/features/health";
 import { GlobalSearch } from "@/features/search";
 import { CherryPickDialog } from "@/components/cherry-pick-dialog";
+import { BookmarksView } from "@/components/bookmarks-view";
 import { BookmarkDialog, LocalNoteEditor } from "@/components/local-metadata-dialogs";
 import { StateBanner } from "@/features/repository";
 import { useLocalMetadata } from "@/features/local-metadata";
@@ -83,6 +84,7 @@ const NAV_ITEMS = [
   { id: "activity", label: "Activity", icon: Activity },
   { id: "commits", label: "Commits", icon: GitCommitHorizontal },
   { id: "reflog", label: "Reflog", icon: HistoryIcon },
+  { id: "bookmarks", label: "Bookmarks", icon: Bookmark },
   { id: "files", label: "Files", icon: Files },
   { id: "hotspots", label: "Hotspots", icon: Flame },
   { id: "ownership", label: "Ownership", icon: UsersRound },
@@ -461,12 +463,13 @@ export function AppShell({
     () => ({
       commits: data?.repository.totalCommits ?? data?.commits.length,
       branches: data?.branches.length,
+      bookmarks: localMetadataState.bookmarks.length,
       worktrees: data?.worktrees.length,
       submodules: data?.submodules.length,
       workspace: data?.status.files.length,
       refs: data ? data.tags.length + data.stashes.length + data.remotes.length : undefined,
     }),
-    [data],
+    [data, localMetadataState.bookmarks.length],
   );
 
   const conflictCount = useMemo(
@@ -995,6 +998,22 @@ function ViewHost({
           onDelete={onDeleteSavedView}
           onCreate={onCreateSavedView}
           canCreate={Boolean(currentSavedView)}
+        />
+      )}
+      {view === "bookmarks" && (
+        <BookmarksView
+          data={data}
+          bookmarks={localMetadata?.bookmarks}
+          notes={localMetadata?.notes}
+          loading={localMetadata?.loading}
+          error={localMetadata?.error}
+          warning={localMetadata?.warning}
+          onReload={localMetadata?.reload}
+          onOpenCommit={onFocusCommit}
+          onEditBookmark={onOpenBookmarkEditor}
+          onDeleteBookmark={onRemoveBookmark}
+          onEditNote={onOpenNoteEditor}
+          onDeleteNote={onRemoveNote}
         />
       )}
       {view === "search" && <SavedViewNotice title="Search views open in the repository search dialog" />}

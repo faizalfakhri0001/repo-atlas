@@ -11,4 +11,11 @@ export {
   normalizeCommitHash,
   normalizeNotes,
 } from "./local-metadata-model";
+export {
+  LOCAL_SEARCH_SNIPPET_LENGTH,
+  filterBookmarkRecords,
+  filterNoteRecords,
+  getLocalCommitStatus,
+  truncateLocalSnippet,
+} from "./bookmarks-model";
 export { useLocalMetadata } from "./use-local-metadata";
