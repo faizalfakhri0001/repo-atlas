@@ -115,10 +115,11 @@ describe("WorktreesView", () => {
         blockingReasons: [],
       },
     });
-    worktreeCreate.mockResolvedValue({ ok: true, data: { operation: { targetPath: "/workspace/repository-new-worktree" } } });
+    worktreeCreate.mockResolvedValue({ ok: true, data: { transactionId: "session-1:1", operation: { targetPath: "/workspace/repository-new-worktree" } } });
     const user = userEvent.setup();
     const onRefresh = vi.fn();
     const onSetOperationMode = vi.fn();
+    const onOperationTransaction = vi.fn();
     render(
       <WorktreesView
         worktrees={[main]}
@@ -131,6 +132,7 @@ describe("WorktreesView", () => {
         sessionId="session-1"
         operationMode="safe-write"
         onSetOperationMode={onSetOperationMode}
+        onOperationTransaction={onOperationTransaction}
         onRefresh={onRefresh}
       />,
     );
@@ -157,6 +159,7 @@ describe("WorktreesView", () => {
       mode: "new-branch",
       targetPath: "/workspace/repository-new-worktree",
     })));
+    expect(onOperationTransaction).toHaveBeenCalledWith(expect.objectContaining({ transactionId: "session-1:1" }));
     await waitFor(() => expect(onRefresh).toHaveBeenCalled());
     expect(onSetOperationMode).not.toHaveBeenCalled();
   });

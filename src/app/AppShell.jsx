@@ -132,6 +132,7 @@ export function AppShell({
   onRemoveMissing,
   onSetOperationMode,
   onWorkspaceOperation,
+  onOperationTransaction,
 }) {
   const data = session?.snapshot ?? null;
   const loading = session?.loading ?? false;
@@ -752,6 +753,7 @@ export function AppShell({
                       isDemo={isDemo}
                       operationError={loadedSession.ui.workspaceOperationError}
                       onSetOperationMode={onSetOperationMode}
+                      onOperationTransaction={onOperationTransaction}
                       onWorkspaceOperation={(operation, paths) => onWorkspaceOperation?.(loadedSession.id, operation, paths)}
                       onRefresh={onRefresh}
                       onCompare={onCompare}
@@ -898,6 +900,7 @@ function ViewHost({
   operationError,
   onSetOperationMode,
   onWorkspaceOperation,
+  onOperationTransaction,
   onRefresh,
   onFileHistoryChange,
   onOpenFileHistory,
@@ -977,6 +980,7 @@ function ViewHost({
           operationMode={operationMode}
           isDemo={isDemo}
           onSetOperationMode={onSetOperationMode}
+          onOperationTransaction={onOperationTransaction}
           onOpenWorktree={onOpenWorktree}
           onCompare={onCompare}
           onRefresh={onRefresh}

@@ -55,6 +55,7 @@ export function WorktreesView({
   operationMode = "read-only",
   isDemo = false,
   onSetOperationMode,
+  onOperationTransaction,
   onOpenWorktree,
   onCompare,
   onRefresh,
@@ -161,6 +162,7 @@ export function WorktreesView({
           operationMode={operationMode}
           isDemo={isDemo}
           onSetOperationMode={onSetOperationMode}
+          onOperationTransaction={onOperationTransaction}
           onCreated={async () => {
             setCreateOpen(false);
             await refresh();
@@ -244,6 +246,7 @@ function WorktreeCreatePanel({
   operationMode,
   isDemo,
   onSetOperationMode,
+  onOperationTransaction,
   onCreated,
 }) {
   const localBranches = useMemo(
@@ -357,8 +360,10 @@ function WorktreeCreatePanel({
         setError(response?.error?.message || "The worktree could not be created.");
         return;
       }
-      setMessage(`Created ${createModeLabel(mode).toLowerCase()} at ${response.data?.operation?.targetPath || targetPath}.`);
-      await onCreated?.(response.data);
+      const payload = response.data ?? response;
+      onOperationTransaction?.(payload);
+      setMessage(`Created ${createModeLabel(mode).toLowerCase()} at ${payload?.operation?.targetPath || targetPath}.`);
+      await onCreated?.(payload);
     } catch (createError) {
       setError(createError?.message || "The worktree could not be created.");
     } finally {

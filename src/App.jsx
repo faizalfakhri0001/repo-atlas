@@ -168,6 +168,12 @@ function App() {
     }
   }, []);
 
+  const rememberOperationTransaction = useCallback((payload) => {
+    if (!payload?.transactionId) return;
+    completedOperationIdsRef.current.add(payload.transactionId);
+    setTimeout(() => completedOperationIdsRef.current.delete(payload.transactionId), 5_000);
+  }, []);
+
   const runWorkspaceOperation = useCallback(
     async (sessionId, operation, paths) => {
       const session = state.sessions.find((candidate) => candidate.id === sessionId);
@@ -201,10 +207,7 @@ function App() {
           return response;
         }
         const payload = response?.data ?? response;
-        if (payload?.transactionId) {
-          completedOperationIdsRef.current.add(payload.transactionId);
-          setTimeout(() => completedOperationIdsRef.current.delete(payload.transactionId), 5_000);
-        }
+        rememberOperationTransaction(payload);
         actions.workspaceOperationSucceeded(sessionId, payload);
         return response;
       } catch (operationError) {
@@ -213,7 +216,7 @@ function App() {
         return { ok: false, error };
       }
     },
-    [actions, state.sessions],
+    [actions, rememberOperationTransaction, state.sessions],
   );
 
   useEffect(() => {
@@ -437,6 +440,7 @@ function App() {
       onRemoveMissing={removeMissingRepository}
       onSetOperationMode={changeOperationMode}
       onWorkspaceOperation={runWorkspaceOperation}
+      onOperationTransaction={rememberOperationTransaction}
     />
   );
 }
