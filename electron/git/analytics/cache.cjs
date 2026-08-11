@@ -2,8 +2,8 @@ const crypto = require("node:crypto");
 
 const DEFAULT_MAX_FULL_INDEXES = 3;
 
-function buildAnalyticsCacheKey({ rootPath, head, refsFingerprint, maxCommits, maxFilesPerCommit }) {
-  const value = JSON.stringify({ rootPath, head, refsFingerprint, maxCommits, maxFilesPerCommit });
+function buildAnalyticsCacheKey({ rootPath, head, refsFingerprint, maxCommits, maxFilesPerCommit, pathPrefix }) {
+  const value = JSON.stringify({ rootPath, head, refsFingerprint, maxCommits, maxFilesPerCommit, pathPrefix: pathPrefix || null });
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 

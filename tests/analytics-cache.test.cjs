@@ -15,6 +15,7 @@ test("analytics cache keys include repository revision and scope", () => {
   assert.notEqual(buildAnalyticsCacheKey(base), buildAnalyticsCacheKey({ ...base, head: "b" }));
   assert.notEqual(buildAnalyticsCacheKey(base), buildAnalyticsCacheKey({ ...base, refsFingerprint: "refs-b" }));
   assert.notEqual(buildAnalyticsCacheKey(base), buildAnalyticsCacheKey({ ...base, maxCommits: 20 }));
+  assert.notEqual(buildAnalyticsCacheKey(base), buildAnalyticsCacheKey({ ...base, pathPrefix: "src/api" }));
 });
 
 test("analytics cache evicts least recently used indexes and invalidates a repository", () => {

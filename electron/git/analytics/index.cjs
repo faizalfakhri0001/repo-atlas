@@ -1,6 +1,6 @@
 const crypto = require("node:crypto");
 const path = require("node:path");
-const { resolveRepository, runGit } = require("../core.cjs");
+const { assertRelativePath, resolveRepository, runGit } = require("../core.cjs");
 const { runGitStream } = require("./runner.cjs");
 const { createAnalyticsParser } = require("./parser.cjs");
 const { addAuthorAlias, normalizeAuthorIdentity } = require("./identity.cjs");
@@ -240,6 +240,7 @@ async function buildAnalyticsIndex(repositoryPath, options = {}) {
   throwIfCancelled(options.signal);
   const repository = await resolveRepository(repositoryPath);
   const scope = normalizeAnalyticsScope(options);
+  const pathPrefix = options.pathPrefix ? assertRelativePath(options.pathPrefix).replace(/\/+$/, "") : null;
   const parser = createAnalyticsParser();
   const [head, refsFingerprint] = await Promise.all([
     readRepositoryRevision(repository.rootPath),
@@ -256,6 +257,7 @@ async function buildAnalyticsIndex(repositoryPath, options = {}) {
     "--no-ext-diff",
     `--max-count=${analyticsReadLimit(scope.maxCommits)}`,
   ];
+  if (pathPrefix) args.push("--", pathPrefix);
 
   await runGitStream(repository.rootPath, args, {
     signal: options.signal,
@@ -275,6 +277,7 @@ async function buildAnalyticsIndex(repositoryPath, options = {}) {
 async function getAnalyticsIndex(repositoryPath, options = {}) {
   const repository = await resolveRepository(repositoryPath);
   const scope = normalizeAnalyticsScope(options);
+  const pathPrefix = options.pathPrefix ? assertRelativePath(options.pathPrefix).replace(/\/+$/, "") : null;
   const [head, refsFingerprint] = await Promise.all([
     readRepositoryRevision(repository.rootPath),
     readRefsFingerprint(repository.rootPath),
@@ -285,6 +288,7 @@ async function getAnalyticsIndex(repositoryPath, options = {}) {
     refsFingerprint,
     maxCommits: scope.maxCommits,
     maxFilesPerCommit: scope.maxFilesPerCommit,
+    pathPrefix,
   });
   const cached = analyticsCache.get(key);
   if (cached) return cached;
@@ -299,7 +303,7 @@ async function getAnalyticsIndex(repositoryPath, options = {}) {
 
   const controller = new AbortController();
   const unlink = linkCancellationSignal(options.signal, controller);
-  const promise = buildAnalyticsIndex(repositoryPath, { ...options, signal: controller.signal })
+  const promise = buildAnalyticsIndex(repositoryPath, { ...options, ...(pathPrefix ? { pathPrefix } : {}), signal: controller.signal })
     .then((index) => {
       const indexKey = buildAnalyticsCacheKey({
         rootPath: index.repositoryKey,
@@ -307,6 +311,7 @@ async function getAnalyticsIndex(repositoryPath, options = {}) {
         refsFingerprint: index.refsFingerprint,
         maxCommits: index.scope.maxCommits,
         maxFilesPerCommit: index.scope.maxFilesPerCommit,
+        pathPrefix,
       });
       analyticsCache.set(indexKey, index, { rootPath: index.repositoryKey });
       return index;
