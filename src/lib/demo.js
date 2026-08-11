@@ -4,6 +4,48 @@
 import { isHashLike, parseSearchQuery } from "../features/search/query-parser.js";
 import { groupSearchResults, scoreFile, scoreText } from "../features/search/search-scoring.js";
 
+const DEMO_SAVED_VIEWS_STORAGE_KEY = "repo-atlas-demo-metadata-v1";
+const DEMO_SAVED_VIEW_TYPES = new Set(["commits", "files", "branches", "compare", "hotspots", "ownership", "activity", "reflog", "search"]);
+
+function getDemoStorage() {
+  try {
+    return typeof globalThis.localStorage !== "undefined" ? globalThis.localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+function cloneDemoValue(value) {
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return null;
+  }
+}
+
+function readDemoSavedViews(repositoryPath) {
+  const storage = getDemoStorage();
+  if (!storage) return [];
+  try {
+    const parsed = JSON.parse(storage.getItem(DEMO_SAVED_VIEWS_STORAGE_KEY) || "{}");
+    return Array.isArray(parsed?.[repositoryPath]) ? parsed[repositoryPath].slice(0, 1000) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDemoSavedViews(repositoryPath, savedViews) {
+  const storage = getDemoStorage();
+  if (!storage) return;
+  try {
+    const parsed = JSON.parse(storage.getItem(DEMO_SAVED_VIEWS_STORAGE_KEY) || "{}");
+    parsed[repositoryPath] = savedViews.slice(0, 1000);
+    storage.setItem(DEMO_SAVED_VIEWS_STORAGE_KEY, JSON.stringify(parsed));
+  } catch {
+    // Demo persistence is best effort; malformed browser storage must not break the preview.
+  }
+}
+
 function mulberry32(seed) {
   let a = seed >>> 0;
   return function rand() {
@@ -1111,6 +1153,23 @@ export function createDemoApi() {
         details: "",
       },
     });
+  const demoRepositoryPath = "/demo/acme-storefront";
+  let demoSavedViews = readDemoSavedViews(demoRepositoryPath);
+  let demoSavedViewSequence = 0;
+  const savedViewError = (message, code = "SAVED_VIEW_INVALID") =>
+    Promise.resolve({ ok: false, error: { message, code } });
+  const saveDemoViews = () => writeDemoSavedViews(demoRepositoryPath, demoSavedViews);
+  const findDemoSavedView = (id) => demoSavedViews.find((view) => view.id === id);
+  const validateDemoSavedViewInput = (input = {}, { requireId = false } = {}) => {
+    const name = typeof input.name === "string" ? input.name.trim() : "";
+    if (!name || name.length > 80) throw new Error("Saved view names must contain between 1 and 80 characters.");
+    if (!DEMO_SAVED_VIEW_TYPES.has(input.viewType)) throw new Error("Saved view type is not supported.");
+    if (requireId && !findDemoSavedView(input.id)) throw new Error("Saved view was not found.");
+    if (input.config !== undefined && (!input.config || typeof input.config !== "object" || Array.isArray(input.config))) {
+      throw new Error("Saved view config must be an object.");
+    }
+    return { name, config: cloneDemoValue(input.config ?? {}), pinned: Boolean(input.pinned) };
+  };
 
   return {
     platform: "demo",
@@ -1129,6 +1188,57 @@ export function createDemoApi() {
     ownership: (payload = {}) => ok(createDemoOwnershipSummary(commits, mainTip, payload)),
     repositoryHealth: (payload = {}) => ok(createDemoHealthSummary(payload)),
     branchIntelligence: (payload = {}) => ok(createDemoBranchIntelligence(payload)),
+    listSavedViews: () => ok({ repositoryId: "demo-repository", savedViews: cloneDemoValue(demoSavedViews), source: "demo", warning: null }),
+    createSavedView: (input = {}) => {
+      try {
+        const normalized = validateDemoSavedViewInput(input);
+        const timestamp = new Date().toISOString();
+        const savedView = {
+          id: `demo-view-${Date.now().toString(36)}-${(++demoSavedViewSequence).toString(36)}`,
+          name: normalized.name,
+          viewType: input.viewType,
+          configVersion: Number(input.configVersion) || 1,
+          config: normalized.config,
+          pinned: normalized.pinned,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          lastOpenedAt: null,
+        };
+        demoSavedViews = [...demoSavedViews, savedView];
+        saveDemoViews();
+        return ok({ repositoryId: "demo-repository", savedView: cloneDemoValue(savedView), savedViews: cloneDemoValue(demoSavedViews) });
+      } catch (error) {
+        return savedViewError(error?.message ?? "Saved view could not be created.");
+      }
+    },
+    updateSavedView: (input = {}) => {
+      const current = findDemoSavedView(input.id);
+      if (!current) return savedViewError("Saved view was not found.", "SAVED_VIEW_NOT_FOUND");
+      try {
+        const normalized = validateDemoSavedViewInput({ ...current, ...input }, { requireId: true });
+        const next = {
+          ...current,
+          ...(input.name !== undefined ? { name: normalized.name } : {}),
+          ...(input.viewType !== undefined ? { viewType: input.viewType } : {}),
+          ...(input.config !== undefined ? { config: normalized.config } : {}),
+          ...(input.pinned !== undefined ? { pinned: normalized.pinned } : {}),
+          ...(input.lastOpenedAt !== undefined ? { lastOpenedAt: input.lastOpenedAt } : {}),
+          updatedAt: new Date().toISOString(),
+        };
+        demoSavedViews = demoSavedViews.map((view) => (view.id === current.id ? next : view));
+        saveDemoViews();
+        return ok({ repositoryId: "demo-repository", savedView: cloneDemoValue(next), savedViews: cloneDemoValue(demoSavedViews) });
+      } catch (error) {
+        return savedViewError(error?.message ?? "Saved view could not be updated.");
+      }
+    },
+    deleteSavedView: (input = {}) => {
+      const current = findDemoSavedView(input.id);
+      if (!current) return savedViewError("Saved view was not found.", "SAVED_VIEW_NOT_FOUND");
+      demoSavedViews = demoSavedViews.filter((view) => view.id !== current.id);
+      saveDemoViews();
+      return ok({ repositoryId: "demo-repository", deletedId: current.id, savedViews: cloneDemoValue(demoSavedViews) });
+    },
     listReflog: ({ ref = "HEAD", limit = 200, skip = 0 } = {}) => {
       const normalizedRef = ref === "HEAD" ? "HEAD" : String(ref).replace(/^refs\/heads\//, "");
       const entriesForRef = reflogByRef.get(normalizedRef) ?? [];
