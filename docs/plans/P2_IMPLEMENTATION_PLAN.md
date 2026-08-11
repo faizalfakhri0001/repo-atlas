@@ -2402,7 +2402,7 @@ list
 orphan state
 ```
 
-E2E:
+Implemented unit, component, IPC, local integration, and browser-demo persistence coverage. E2E coverage is skipped per request.
 
 ```text
 bookmark
@@ -3017,14 +3017,14 @@ The bookmark indicator is conditional on bookmark metadata supplied to the view;
 
 ## Stage P2-5 — Bookmarks / Notes Foundation
 
-- [ ] Bookmark model.
-- [ ] Note model.
-- [ ] Persistence.
-- [ ] Graph integration.
-- [ ] Commit detail integration.
-- [ ] File History indicator.
-- [ ] Reflog indicator.
-- [ ] Tests.
+- [x] Bookmark model.
+- [x] Note model.
+- [x] Persistence.
+- [x] Graph integration.
+- [x] Commit detail integration.
+- [x] File History indicator.
+- [x] Reflog indicator.
+- [x] Tests (unit, component, IPC, and browser demo persistence; browser end-to-end coverage skipped per request).
 
 ---
 
@@ -3430,17 +3430,17 @@ P2 must not introduce telemetry.
 
 ## Bookmarks / Notes
 
-- [ ] bookmark
-- [ ] label/category
-- [ ] note
-- [ ] graph
-- [ ] commit detail
-- [ ] file history
-- [ ] reflog
+- [x] bookmark
+- [x] label/category
+- [x] note
+- [x] graph
+- [x] commit detail
+- [x] file history
+- [x] reflog
 - [ ] bookmarks explorer
 - [ ] search
 - [ ] orphan handling
-- [ ] privacy notice
+- [x] privacy notice
 
 ## Quality
 
