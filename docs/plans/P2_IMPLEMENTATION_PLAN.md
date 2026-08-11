@@ -2963,16 +2963,18 @@ main + linked worktree can coexist as separate sessions and share repository met
 
 ## Stage P2-2 — Reflog UI
 
-- [ ] Timeline.
-- [ ] Grouping.
-- [ ] Filter.
-- [ ] Search.
-- [ ] Detail.
-- [ ] Compare previous.
-- [ ] View commit.
-- [ ] Bookmark indicator.
-- [ ] Auto refresh.
+- [x] Timeline.
+- [x] Grouping.
+- [x] Filter.
+- [x] Search.
+- [x] Detail.
+- [x] Compare previous.
+- [x] View commit.
+- [x] Bookmark indicator.
+- [x] Auto refresh.
 - [ ] E2E.
+
+The bookmark indicator is conditional on bookmark metadata supplied to the view; bookmark persistence and editing remain part of the later bookmarks work. E2E coverage is intentionally skipped for this implementation.
 
 ---
 
