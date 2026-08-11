@@ -46,7 +46,7 @@ function parseReflogEntries(raw, { refName = "HEAD", offset = 0 } = {}) {
 
   return raw
     .split(REFLOG_RECORD_SEPARATOR)
-    .map((record) => record.replace(/\n+$/, ""))
+    .map((record) => record.replace(/^\n+/, "").replace(/\n+$/, ""))
     .filter(Boolean)
     .map((record, index) => {
       const fields = record.split(REFLOG_FIELD_SEPARATOR);
