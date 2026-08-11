@@ -3000,18 +3000,18 @@ The bookmark indicator is conditional on bookmark metadata supplied to the view;
 
 ## Stage P2-4 — Activity Heatmap
 
-- [ ] Activity backend.
-- [ ] Daily bucket.
-- [ ] Timezone normalization.
-- [ ] Quantile scale.
-- [ ] Compact Overview.
-- [ ] Full view.
-- [ ] Tooltip.
-- [ ] Day detail.
-- [ ] Author filter.
-- [ ] Path filter.
-- [ ] Saved View support.
-- [ ] Tests.
+- [x] Activity backend.
+- [x] Daily bucket.
+- [x] Timezone normalization.
+- [x] Quantile scale.
+- [x] Compact Overview.
+- [x] Full view.
+- [x] Tooltip.
+- [x] Day detail.
+- [x] Author filter.
+- [x] Path filter.
+- [x] Saved View support.
+- [x] Tests (unit, component, integration, and IPC; browser end-to-end coverage skipped per request).
 
 ---
 
