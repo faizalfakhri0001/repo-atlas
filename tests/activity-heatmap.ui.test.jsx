@@ -46,7 +46,7 @@ describe("ActivityHeatmap", () => {
 
     expect(await screen.findByText("Repository activity")).toBeInTheDocument();
     expect(screen.getByText(/This repository activity report is bounded/)).toBeInTheDocument();
-    const activeDay = screen.getByRole("button", { name: /1 commit · 5 additions · 1 deletion/ });
+    const activeDay = screen.getByRole("button", { name: /1 commit · \+5 \/ -1/ });
     expect(activeDay).toHaveAttribute("title", expect.stringContaining("contributor"));
 
     await user.click(activeDay);

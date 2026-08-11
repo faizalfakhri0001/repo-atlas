@@ -33,7 +33,12 @@ function authorLabel(author) {
 
 function bucketTitle(bucket) {
   if (!bucket) return "No activity";
-  return `${formatActivityDate(bucket.date)} · ${count(bucket.commits)} commit${bucket.commits === 1 ? "" : "s"} · ${count(bucket.additions)} additions · ${count(bucket.deletions)} deletions · ${count(bucket.authors)} contributor${bucket.authors === 1 ? "" : "s"}`;
+  return `${formatActivityDate(bucket.date)} · ${count(bucket.commits)} commit${bucket.commits === 1 ? "" : "s"} · +${count(bucket.additions)} / -${count(bucket.deletions)} · ${count(bucket.authors)} contributor${bucket.authors === 1 ? "" : "s"}`;
+}
+
+function entryTime(entry) {
+  const date = new Date(entry?.authoredAt ?? "");
+  return Number.isNaN(date.getTime()) ? "Unknown time" : new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 function Stat({ label, value, detail }) {
@@ -131,7 +136,7 @@ function DayDetail({ bucket, onOpenCommit }) {
             <div key={entry.hash} className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2 text-xs">
               <code className="shrink-0 font-mono text-primary">{entry.shortHash}</code>
               <span className="min-w-0 flex-1 truncate" title={entry.subject}>{entry.subject || "Untitled commit"}</span>
-              <span className="shrink-0 text-muted-foreground">{authorLabel(entry.author)}</span>
+              <span className="shrink-0 text-muted-foreground">{authorLabel(entry.author)} · {entryTime(entry)}</span>
               <Button variant="outline" size="sm" className="h-7" onClick={() => onOpenCommit?.(entry.hash)}>Open Commit</Button>
             </div>
           ))}
@@ -226,10 +231,10 @@ export function ActivityHeatmap({ repoPath, revision, initialConfig = null, comp
         </div>
         <div className={cn("mt-4", compact ? "rounded-lg border border-border/60 bg-background/30 p-3" : "rounded-xl border border-border/70 bg-background/30 p-4")}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-            <span>{RANGE_LABELS[data?.range] ?? "Activity"} · {METRIC_LABELS[data?.metric] ?? "Commits"} · {getUserTimeZone()}</span>
+            <span>{RANGE_LABELS[data?.range] ?? "Activity"} · {METRIC_LABELS[data?.metric] ?? "Commits"} · user-local calendar day ({data?.timeZone ?? getUserTimeZone()})</span>
             <span className="flex items-center gap-1.5"><span>Less</span>{LEVEL_CLASSES.map((className, level) => <span key={level} className={cn("size-3 rounded-[3px]", className)} />)}<span>More</span></span>
           </div>
-          <ActivityGrid buckets={data?.buckets ?? []} selectedDate={selectedDate} onSelect={setSelectedDate} compact={compact} />
+          {data?.stats?.totalCommits > 0 ? <ActivityGrid buckets={data?.buckets ?? []} selectedDate={selectedDate} onSelect={setSelectedDate} compact={compact} /> : <div className="py-6 text-center text-xs text-muted-foreground">No repository activity was recorded in the selected range.</div>}
         </div>
         {!compact && <DayDetail bucket={selectedBucket} onOpenCommit={onOpenCommit} />}
       </CardContent>
