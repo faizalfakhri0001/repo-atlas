@@ -1,4 +1,5 @@
 const fs = require("node:fs/promises");
+const crypto = require("node:crypto");
 const path = require("node:path");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
@@ -6,6 +7,7 @@ const { promisify } = require("node:util");
 const execFileAsync = promisify(execFile);
 const MAX_BUFFER = 32 * 1024 * 1024;
 const HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
+const REPOSITORY_ID_PATTERN = /^[0-9a-f]{64}$/;
 
 class GitServiceError extends Error {
   constructor(message, code = "GIT_ERROR", details = "") {
@@ -135,6 +137,34 @@ function isPathInside(root, candidate) {
   return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
+function normalizeIdentityPath(value) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return "";
+
+  const hadUncPrefix = raw.startsWith("\\\\") || raw.startsWith("//");
+  let normalized = raw.replaceAll("\\", "/").replace(/\/{2,}/g, "/");
+  if (hadUncPrefix && !normalized.startsWith("//")) normalized = `/${normalized}`;
+  if (/^[A-Z]:/.test(normalized)) normalized = `${normalized[0].toLowerCase()}${normalized.slice(1)}`;
+  if (normalized.length > 1) normalized = normalized.replace(/\/$/, "");
+  return normalized;
+}
+
+async function canonicalizePath(candidate) {
+  const normalized = path.normalize(path.resolve(String(candidate ?? "")));
+  try {
+    return await fs.realpath(normalized);
+  } catch (error) {
+    if (error?.code === "ENOENT") return normalized;
+    throw error;
+  }
+}
+
+function createRepositoryId(commonGitDir) {
+  const normalized = normalizeIdentityPath(commonGitDir);
+  if (!normalized) throw new GitServiceError("A common Git directory is required.", "INVALID_PATH");
+  return crypto.createHash("sha256").update(normalized, "utf8").digest("hex");
+}
+
 async function verifySymlinkBoundary(repositoryRoot, target) {
   let realRoot;
   try {
@@ -248,23 +278,31 @@ async function validateDirectory(candidatePath) {
 
 async function resolveRepository(candidatePath) {
   const selectedPath = await validateDirectory(candidatePath);
-  const { stdout: root } = await runGit(selectedPath, ["rev-parse", "--show-toplevel"]);
-  const { stdout: gitDirRaw } = await runGit(selectedPath, ["rev-parse", "--git-dir"]);
-  const rootPath = path.resolve(selectedPath, root);
-  const gitDir = path.isAbsolute(gitDirRaw)
-    ? path.normalize(gitDirRaw)
-    : path.resolve(selectedPath, gitDirRaw);
+  const [{ stdout: root }, { stdout: gitDirRaw }, { stdout: commonGitDirRaw }] = await Promise.all([
+    runGit(selectedPath, ["rev-parse", "--show-toplevel"]),
+    runGit(selectedPath, ["rev-parse", "--git-dir"]),
+    runGit(selectedPath, ["rev-parse", "--git-common-dir"]),
+  ]);
+  const rootPath = await canonicalizePath(path.resolve(selectedPath, root));
+  const gitDir = await canonicalizePath(path.isAbsolute(gitDirRaw) ? gitDirRaw : path.resolve(selectedPath, gitDirRaw));
+  const commonGitDir = await canonicalizePath(
+    path.isAbsolute(commonGitDirRaw) ? commonGitDirRaw : path.resolve(selectedPath, commonGitDirRaw),
+  );
 
   return {
     selectedPath,
     rootPath,
     gitDir,
+    commonGitDir,
+    repositoryId: createRepositoryId(commonGitDir),
+    isLinkedWorktree: normalizeIdentityPath(gitDir) !== normalizeIdentityPath(commonGitDir),
     name: path.basename(rootPath),
   };
 }
 
 module.exports = {
   GitServiceError,
+  REPOSITORY_ID_PATTERN,
   runGit,
   humanizeGitError,
   assertCommitHash,
@@ -274,5 +312,8 @@ module.exports = {
   resolveRepositoryFilePath,
   resolveCommit,
   validateDirectory,
+  normalizeIdentityPath,
+  canonicalizePath,
+  createRepositoryId,
   resolveRepository,
 };
