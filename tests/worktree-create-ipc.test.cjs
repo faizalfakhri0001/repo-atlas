@@ -12,6 +12,10 @@ test("worktree creation stays behind explicit service and IPC contracts", () => 
 
   assert.equal(typeof service.previewWorktreeCreate, "function");
   assert.equal(typeof service.createWorktree, "function");
+  assert.equal(typeof service.previewWorktreeRemove, "function");
+  assert.equal(typeof service.removeWorktree, "function");
+  assert.equal(typeof service.previewWorktreePrune, "function");
+  assert.equal(typeof service.pruneWorktrees, "function");
   assert.match(main, /"dialog:choose-worktree-location": async \(payload\) =>/);
   assert.match(main, /properties: \["openDirectory", "createDirectory"\]/);
   assert.match(main, /"worktree:create-preview": async \(payload\) => previewWorktreeCreate\(/);
@@ -19,6 +23,14 @@ test("worktree creation stays behind explicit service and IPC contracts", () => 
   assert.match(preload, /chooseWorktreeLocation: \(payload\) => ipcRenderer\.invoke\("dialog:choose-worktree-location", payload\)/);
   assert.match(preload, /worktreeCreatePreview: \(payload\) => ipcRenderer\.invoke\("worktree:create-preview", payload\)/);
   assert.match(preload, /worktreeCreate: \(payload\) => ipcRenderer\.invoke\("worktree:create", payload\)/);
+  assert.match(main, /"worktree:remove-preview": async \(payload\) => previewWorktreeRemove\(/);
+  assert.match(main, /"worktree:remove": \(payload\) => executeWorkspaceOperation\(payload, \(\{ operationMode \}\) => removeWorktree\(/);
+  assert.match(main, /"worktree:prune-preview": async \(payload\) => previewWorktreePrune\(/);
+  assert.match(main, /"worktree:prune": \(payload\) => executeWorkspaceOperation\(payload, \(\{ operationMode \}\) => pruneWorktrees\(/);
+  assert.match(preload, /worktreeRemovePreview: \(payload\) => ipcRenderer\.invoke\("worktree:remove-preview", payload\)/);
+  assert.match(preload, /worktreeRemove: \(payload\) => ipcRenderer\.invoke\("worktree:remove", payload\)/);
+  assert.match(preload, /worktreePrunePreview: \(payload\) => ipcRenderer\.invoke\("worktree:prune-preview", payload\)/);
+  assert.match(preload, /worktreePrune: \(payload\) => ipcRenderer\.invoke\("worktree:prune", payload\)/);
   assert.match(main, /watchManager\.beginTransaction\(sessionId\)/);
   assert.match(main, /watchManager\.endTransaction\(sessionId, transactionId\)/);
 });
