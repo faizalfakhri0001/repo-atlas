@@ -1588,6 +1588,171 @@ async function createWorktree(repositoryPath, options = {}, { operationMode = "r
   };
 }
 
+function removeBlock(code, message) {
+  return `${code} — ${message}`;
+}
+
+async function findListedWorktree(worktrees, worktreePath) {
+  if (typeof worktreePath !== "string" || worktreePath.trim().length === 0 || worktreePath.includes("\0")) return null;
+  const requestedPath = await fs.realpath(path.resolve(worktreePath)).catch(() => path.resolve(worktreePath));
+  return worktrees.find((worktree) => path.resolve(worktree.path) === requestedPath) ?? null;
+}
+
+async function readWorktreeStatus(worktree) {
+  if (worktree.bare || !worktree.exists) return { status: null, dirty: false, changes: 0 };
+  const statusResult = await runGit(worktree.path, ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]);
+  const status = parseStatus(statusResult.stdout);
+  const changes = status.files.filter((file) => file.kind !== "ignored");
+  return { status, dirty: changes.length > 0, changes: changes.length };
+}
+
+async function previewWorktreeRemove(repositoryPath, worktreePath, {
+  operationMode = "read-only",
+  currentWorktreePath = "",
+} = {}) {
+  const repository = await resolveRepository(repositoryPath);
+  const worktrees = await readWorktreeEntries(repository);
+  const worktree = await findListedWorktree(worktrees, worktreePath);
+  const operation = { mode: "remove", targetPath: worktree?.path || (typeof worktreePath === "string" ? path.resolve(worktreePath) : "") };
+  const warnings = [];
+  const blockingReasons = [];
+  const result = {
+    allowed: false,
+    main: Boolean(worktree?.main),
+    dirty: false,
+    changes: 0,
+    locked: Boolean(worktree?.locked),
+    exists: Boolean(worktree?.exists),
+    bare: Boolean(worktree?.bare),
+    prunable: Boolean(worktree?.prunable),
+    current: false,
+    operation,
+    worktree: worktree ?? null,
+    warnings,
+    blockingReasons,
+  };
+
+  if (!worktree) {
+    blockingReasons.push(removeBlock("WORKTREE_NOT_FOUND", "The selected path is not a registered Git worktree."));
+    return result;
+  }
+
+  if (currentWorktreePath) {
+    const current = await findListedWorktree(worktrees, currentWorktreePath);
+    result.current = Boolean(current && path.resolve(current.path) === path.resolve(worktree.path));
+    if (result.current) {
+      blockingReasons.push(removeBlock("CURRENT_WORKTREE_CANNOT_BE_REMOVED", "The active worktree session cannot be removed."));
+    }
+  }
+  if (result.main) blockingReasons.push(removeBlock("MAIN_WORKTREE_CANNOT_BE_REMOVED", "The main worktree cannot be removed."));
+  if (result.locked) blockingReasons.push(removeBlock("LOCKED_WORKTREE_CANNOT_BE_REMOVED", "Unlock this worktree before removing it."));
+  if (result.bare) blockingReasons.push(removeBlock("BARE_WORKTREE_CANNOT_BE_REMOVED", "Bare worktrees cannot be removed by this operation."));
+  if (!result.exists || result.prunable) {
+    blockingReasons.push(removeBlock("WORKTREE_UNAVAILABLE", "The worktree directory is unavailable; use prune for stale metadata."));
+  } else {
+    const status = await readWorktreeStatus(worktree);
+    result.dirty = status.dirty;
+    result.changes = status.changes;
+    if (result.dirty) {
+      blockingReasons.push(removeBlock("DIRTY_WORKTREE_CANNOT_BE_REMOVED", "This worktree contains uncommitted changes and cannot be removed safely."));
+    }
+  }
+  if (operationMode !== "safe-write") {
+    blockingReasons.push(removeBlock("READ_ONLY_MODE", "Enable Safe Write before removing a worktree."));
+  }
+
+  result.allowed = blockingReasons.length === 0;
+  return result;
+}
+
+async function removeWorktree(repositoryPath, worktreePath, {
+  operationMode = "read-only",
+  currentWorktreePath = "",
+} = {}) {
+  assertSafeWriteEnabled(operationMode);
+  const preview = await previewWorktreeRemove(repositoryPath, worktreePath, { operationMode, currentWorktreePath });
+  if (!preview.allowed) {
+    throw new GitServiceError(
+      preview.blockingReasons.join(" "),
+      "WORKTREE_REMOVE_BLOCKED",
+      JSON.stringify(preview),
+    );
+  }
+
+  const repository = await resolveRepository(repositoryPath);
+  const result = await runGit(repository.rootPath, ["worktree", "remove", "--", preview.operation.targetPath], {
+    allowFailure: true,
+    timeout: 120_000,
+  });
+  if (result.failed) {
+    throw new GitServiceError(humanizeGitError(result.stderr), "WORKTREE_REMOVE_FAILED", result.stderr);
+  }
+
+  const worktrees = await readWorktreeEntries(repository);
+  return {
+    operation: preview.operation,
+    removedPath: preview.operation.targetPath,
+    worktrees,
+  };
+}
+
+function parseWorktreePruneRows(raw) {
+  return String(raw || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^Removing\s+(.+?)(?::\s*(.*))?$/i);
+      return {
+        path: match?.[1]?.trim() || line,
+        reason: match?.[2]?.trim() || "",
+        raw: line,
+      };
+    });
+}
+
+async function previewWorktreePrune(repositoryPath, { operationMode = "read-only" } = {}) {
+  const repository = await resolveRepository(repositoryPath);
+  const result = await runGit(repository.rootPath, ["worktree", "prune", "--dry-run", "--verbose"], { allowFailure: true });
+  if (result.failed) {
+    throw new GitServiceError(humanizeGitError(result.stderr), "WORKTREE_PRUNE_PREVIEW_FAILED", result.stderr);
+  }
+
+  const items = parseWorktreePruneRows(result.stdout || result.stderr);
+  const warnings = items.length > 0 ? [] : ["No stale worktree metadata was found."];
+  const blockingReasons = operationMode === "safe-write"
+    ? []
+    : [removeBlock("READ_ONLY_MODE", "Enable Safe Write before pruning stale worktree metadata.")];
+  return {
+    allowed: items.length > 0 && blockingReasons.length === 0,
+    items,
+    warnings,
+    blockingReasons,
+  };
+}
+
+async function pruneWorktrees(repositoryPath, { operationMode = "read-only" } = {}) {
+  assertSafeWriteEnabled(operationMode);
+  const preview = await previewWorktreePrune(repositoryPath, { operationMode });
+  if (!preview.allowed) {
+    throw new GitServiceError(
+      preview.blockingReasons.join(" ") || "No stale worktree metadata was found.",
+      "WORKTREE_PRUNE_BLOCKED",
+      JSON.stringify(preview),
+    );
+  }
+
+  const repository = await resolveRepository(repositoryPath);
+  const result = await runGit(repository.rootPath, ["worktree", "prune"], { allowFailure: true, timeout: 120_000 });
+  if (result.failed) {
+    throw new GitServiceError(humanizeGitError(result.stderr), "WORKTREE_PRUNE_FAILED", result.stderr);
+  }
+  return {
+    items: preview.items,
+    worktrees: await readWorktreeEntries(repository),
+  };
+}
+
 function buildPartialRepository(repository, status, defaultBranchInfo = {}) {
   return {
     ...repository,
@@ -1752,6 +1917,10 @@ module.exports = {
   getWorktreeDetails,
   previewWorktreeCreate,
   createWorktree,
+  previewWorktreeRemove,
+  removeWorktree,
+  previewWorktreePrune,
+  pruneWorktrees,
   listRepositoryFiles,
   readRepositoryFile,
   listFileHistory,
