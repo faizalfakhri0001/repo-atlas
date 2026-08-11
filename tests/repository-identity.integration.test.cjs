@@ -11,6 +11,7 @@ const {
   normalizeIdentityPath,
   resolveRepository,
 } = require("../electron/git/core.cjs");
+const { refreshRepositoryPartial, scanRepository } = require("../electron/git-service.cjs");
 
 const execFileAsync = promisify(execFile);
 
@@ -42,6 +43,28 @@ test("repository identity is shared by a main worktree and its linked worktree",
   assert.equal(linkedRepository.isLinkedWorktree, true);
   assert.notEqual(mainRepository.gitDir, linkedRepository.gitDir);
   assert.equal(mainRepository.gitDir, mainRepository.commonGitDir);
+
+  const snapshot = await scanRepository(linked);
+  assert.deepEqual(
+    {
+      rootPath: snapshot.repository.rootPath,
+      gitDir: snapshot.repository.gitDir,
+      commonGitDir: snapshot.repository.commonGitDir,
+      repositoryId: snapshot.repository.repositoryId,
+      isLinkedWorktree: snapshot.repository.isLinkedWorktree,
+    },
+    {
+      rootPath: linkedRepository.rootPath,
+      gitDir: linkedRepository.gitDir,
+      commonGitDir: linkedRepository.commonGitDir,
+      repositoryId: linkedRepository.repositoryId,
+      isLinkedWorktree: true,
+    },
+  );
+
+  const partial = await refreshRepositoryPartial(linked, ["status"]);
+  assert.equal(partial.data.repository.commonGitDir, linkedRepository.commonGitDir);
+  assert.equal(partial.data.repository.repositoryId, linkedRepository.repositoryId);
 });
 
 test("repository IDs hash normalized identity paths", () => {
