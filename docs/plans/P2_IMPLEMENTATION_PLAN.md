@@ -3030,13 +3030,14 @@ The bookmark indicator is conditional on bookmark metadata supplied to the view;
 
 ## Stage P2-6 — Bookmarks Explorer
 
-- [ ] Bookmarks page.
-- [ ] Notes tab.
-- [ ] Search.
-- [ ] Orphan handling.
-- [ ] Global Search integration.
-- [ ] Command Palette integration.
-- [ ] E2E.
+- [x] Bookmarks page.
+- [x] Notes tab.
+- [x] Search.
+- [x] Orphan handling.
+- [x] Global Search integration.
+- [x] Command Palette integration.
+- [x] Browser E2E skipped per request.
+- [x] Tests (unit, component, and integration; browser end-to-end coverage skipped per request).
 
 ---
 
@@ -3437,9 +3438,9 @@ P2 must not introduce telemetry.
 - [x] commit detail
 - [x] file history
 - [x] reflog
-- [ ] bookmarks explorer
-- [ ] search
-- [ ] orphan handling
+- [x] bookmarks explorer
+- [x] search
+- [x] orphan handling
 - [x] privacy notice
 
 ## Quality
