@@ -3,6 +3,7 @@
 
 import { isHashLike, parseSearchQuery } from "../features/search/query-parser.js";
 import { groupSearchResults, scoreFile, scoreText } from "../features/search/search-scoring.js";
+import { aggregateActivity } from "../features/activity/activity-model.js";
 
 const DEMO_SAVED_VIEWS_STORAGE_KEY = "repo-atlas-demo-metadata-v1";
 const DEMO_SAVED_VIEW_TYPES = new Set(["commits", "files", "branches", "compare", "hotspots", "ownership", "activity", "reflog", "search"]);
@@ -256,6 +257,24 @@ function filesForCommit(commit) {
     });
   }
   return files;
+}
+
+function createDemoActivitySummary(commits, mainTip, options = {}) {
+  const maxCommits = Math.min(50_000, Math.max(1, Math.floor(Number(options.maxCommits) || 10_000)));
+  const selected = commits.slice(0, maxCommits).map((commit) => ({ ...commit, authoredAt: commit.date, files: filesForCommit(commit) }));
+  return aggregateActivity(selected, {
+    ...options,
+    now: options.now ?? Date.now(),
+    repositoryKey: "/demo/acme-storefront",
+    head: mainTip,
+    scope: {
+      maxCommits,
+      maxFilesPerCommit: 5_000,
+      processedCommits: selected.length,
+      truncated: commits.length > maxCommits,
+      filesTruncated: false,
+    },
+  });
 }
 
 function demoFileEntry(filePath, tracked = true) {
@@ -1195,6 +1214,7 @@ export function createDemoApi() {
     unstageHunk: demoWriteError,
     scanRepository: () => ok(scanData()),
     analyticsSummary: (payload = {}) => ok(createDemoAnalyticsSummary(commits, mainTip, payload)),
+    activity: (payload = {}) => ok(createDemoActivitySummary(commits, mainTip, payload)),
     hotspots: (payload = {}) => ok(createDemoHotspotSummary(commits, mainTip, payload)),
     ownership: (payload = {}) => ok(createDemoOwnershipSummary(commits, mainTip, payload)),
     repositoryHealth: (payload = {}) => ok(createDemoHealthSummary(payload)),
