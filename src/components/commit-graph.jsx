@@ -112,6 +112,7 @@ export function CommitGraph({
   onRemoveBookmark,
   onOpenNoteEditor,
   onRemoveNote,
+  onCommitSelected,
 }) {
   const repoPath = data.repository.rootPath;
   const remoteNames = useMemo(() => data.remotes.map((remote) => remote.name), [data.remotes]);
@@ -179,8 +180,9 @@ export function CommitGraph({
   const selectSingle = useCallback((hash, index, { openDetails = true } = {}) => {
     setSelected(new Set([hash]));
     setAnchorIndex(index);
+    onCommitSelected?.(hash);
     if (openDetails) setDetailHash(hash);
-  }, []);
+  }, [onCommitSelected]);
 
   const fetchList = useCallback(
     async ({ refs, nextOrder, append = false } = {}) => {

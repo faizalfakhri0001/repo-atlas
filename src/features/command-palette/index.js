@@ -11,6 +11,7 @@ export { createSavedViewCommands } from "./saved-view-commands.js";
 export { createRepositoryCommands } from "./repository-commands.js";
 export { createFileCommands } from "./file-commands.js";
 export { createSearchCommands } from "./search-commands.js";
+export { createBookmarkCommands } from "./bookmark-commands.js";
 export { CommandPalette, formatCommandShortcut } from "./CommandPalette.jsx";
 export { useCommandPalette } from "./use-command-palette.js";
 export { findShortcutCommand, shortcutMatches, useCommandPaletteShortcuts } from "./command-shortcuts.js";

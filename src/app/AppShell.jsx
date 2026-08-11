@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   Activity,
@@ -57,6 +57,7 @@ import { StateBanner } from "@/features/repository";
 import { useLocalMetadata } from "@/features/local-metadata";
 import {
   CommandPalette,
+  createBookmarkCommands,
   createCommandRegistry,
   createFileCommands,
   createNavigationCommands,
@@ -156,6 +157,7 @@ export function AppShell({
   const loadedSessions = workspaceSessions.filter((candidate) => candidate.snapshot);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [globalSearchInitialQuery, setGlobalSearchInitialQuery] = useState("");
+  const [currentCommitHash, setCurrentCommitHash] = useState(null);
   const [openedSavedViewId, setOpenedSavedViewId] = useState(null);
   const [savedViewDialog, setSavedViewDialog] = useState(null);
   const [savedViewActionError, setSavedViewActionError] = useState(null);
@@ -164,6 +166,9 @@ export function AppShell({
   const [localMetadataActionError, setLocalMetadataActionError] = useState(null);
   const savedViewsState = useSavedViews({ repositoryPath: data?.repository.rootPath });
   const localMetadataState = useLocalMetadata({ repositoryPath: data?.repository.rootPath });
+  useEffect(() => {
+    setCurrentCommitHash(null);
+  }, [data?.repository?.rootPath]);
   const currentSavedView = useMemo(
     () => getCurrentSavedViewSnapshot({
       activeView,
@@ -189,16 +194,11 @@ export function AppShell({
     }
   }, [data]);
 
-  const openSearchResult = useCallback(
-    (result) => {
-      if (!result) return;
-      if (result.type === "file") onOpenFile?.(result.path);
-      else if (result.type === "commit" || result.type === "tag") onFocusCommit?.(result.hash);
-      else if (result.type === "branch") onShowBranchInGraph?.(result.name);
-      else if (result.type === "author") onFocusAuthor?.(result.name);
-    },
-    [onFocusAuthor, onFocusCommit, onOpenFile, onShowBranchInGraph],
-  );
+  const focusCommit = useCallback((hash) => {
+    if (!hash) return;
+    setCurrentCommitHash(hash);
+    onFocusCommit?.(hash);
+  }, [onFocusCommit]);
 
   const navigateToView = useCallback(
     (view) => {
@@ -258,6 +258,18 @@ export function AppShell({
       }
     },
     [data, onCompare, requestNavigationToView, savedViewsState, selectedSessionId],
+  );
+
+  const openSearchResult = useCallback(
+    (result) => {
+      if (!result) return;
+      if (result.type === "file") onOpenFile?.(result.path);
+      else if (result.type === "commit" || result.type === "tag" || result.type === "bookmark" || result.type === "note") focusCommit(result.hash);
+      else if (result.type === "branch") onShowBranchInGraph?.(result.name);
+      else if (result.type === "author") onFocusAuthor?.(result.name);
+      else if (result.type === "saved-view" && result.savedView) void openSavedView(result.savedView);
+    },
+    [focusCommit, onFocusAuthor, onOpenFile, onShowBranchInGraph, openSavedView],
   );
 
   const openSaveDialog = useCallback((mode, target = null) => {
@@ -434,11 +446,14 @@ export function AppShell({
       quickOpenFile: onQuickOpenFile,
       openGlobalSearch,
       currentSavedView,
+      currentCommitHash,
       saveCurrentView,
       manageSavedViews,
       openSavedView,
+      openBookmarkEditor,
+      openNoteEditor,
     }),
-    [activeView, currentSavedView, data?.repository, isDemo, manageSavedViews, navigateToView, onActivateRepository, onCloseRepository, onOpen, onOpenRecent, onQuickOpenFile, onRefresh, openGlobalSearch, openSavedView, recentRepositories, saveCurrentView, session, workspaceSessions],
+    [activeView, currentCommitHash, currentSavedView, data?.repository, isDemo, manageSavedViews, navigateToView, onActivateRepository, onCloseRepository, onOpen, onOpenRecent, onQuickOpenFile, onRefresh, openBookmarkEditor, openGlobalSearch, openNoteEditor, openSavedView, recentRepositories, saveCurrentView, session, workspaceSessions],
   );
   const commandList = useMemo(
     () => createCommandRegistry([
@@ -447,6 +462,7 @@ export function AppShell({
       ...createRepositoryCommands(commandContext),
       ...createFileCommands(),
       ...createSearchCommands(),
+      ...createBookmarkCommands(),
     ]),
     [commandContext],
   );
@@ -741,7 +757,8 @@ export function AppShell({
                       onNavigate={navigateToView}
                       onCherryPick={onCherryPick}
                       onShowBranchInGraph={onShowBranchInGraph}
-                      onFocusCommit={onFocusCommit}
+                      onFocusCommit={focusCommit}
+                      onCommitSelected={setCurrentCommitHash}
                       onShowWorkspace={onShowWorkspace}
                       onFileHistoryChange={(value) => onFileHistoryChange?.(loadedSession.id, value)}
                       onOpenFileHistory={(path) => onOpenFileHistory?.(loadedSession.id, path)}
@@ -806,6 +823,11 @@ export function AppShell({
         initialQuery={globalSearchInitialQuery}
         repositoryPath={data?.repository.rootPath}
         revision={data ? { head: data.repository.head, scannedAt: data.scannedAt } : null}
+        localMetadata={{
+          bookmarks: localMetadataState.bookmarks,
+          notes: localMetadataState.notes,
+          savedViews: savedViewsState.savedViews,
+        }}
         onOpenResult={openSearchResult}
       />
       {savedViewDialog && (
@@ -857,6 +879,7 @@ function ViewHost({
   onCherryPick,
   onShowBranchInGraph,
   onFocusCommit,
+  onCommitSelected,
   onShowWorkspace,
   fileHistory,
   fileFilterRequest,
@@ -917,6 +940,7 @@ function ViewHost({
           onRemoveBookmark={onRemoveBookmark}
           onOpenNoteEditor={onOpenNoteEditor}
           onRemoveNote={onRemoveNote}
+          onCommitSelected={onCommitSelected}
         />
       </div>
       <div className={cn("h-full", view !== "compare" && "hidden")}>
