@@ -12,6 +12,12 @@ function normalizeRepositoryPath(repositoryPath) {
   return normalized || null;
 }
 
+function normalizeRepositoryIdentity(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized || null;
+}
+
 export function getSessionId(repositoryPath) {
   const normalized = normalizeRepositoryPath(repositoryPath);
   if (!normalized) return "demo";
@@ -24,12 +30,16 @@ export function getRepositoryName(repositoryPath) {
   return normalized.split(/[\\/]/).filter(Boolean).at(-1) ?? "Repository";
 }
 
-export function createRepositorySession(repositoryPath, lastActivatedAt = Date.now()) {
+export function createRepositorySession(repositoryPath, lastActivatedAt = Date.now(), identity = {}) {
   const path = normalizeRepositoryPath(repositoryPath);
   return {
     id: getSessionId(path),
     path,
     name: getRepositoryName(path),
+    repositoryId: normalizeRepositoryIdentity(identity.repositoryId),
+    commonGitDir: normalizeRepositoryIdentity(identity.commonGitDir),
+    gitDir: normalizeRepositoryIdentity(identity.gitDir),
+    isLinkedWorktree: Boolean(identity.isLinkedWorktree),
     snapshot: null,
     status: "created",
     loading: false,
@@ -148,6 +158,12 @@ function applyLoadSuccess(state, action) {
     id: canonicalId,
     path: canonicalPath,
     name: repository.name ?? baseSession?.name ?? getRepositoryName(canonicalPath),
+    repositoryId: normalizeRepositoryIdentity(repository.repositoryId) ?? baseSession?.repositoryId ?? null,
+    commonGitDir: normalizeRepositoryIdentity(repository.commonGitDir) ?? baseSession?.commonGitDir ?? null,
+    gitDir: normalizeRepositoryIdentity(repository.gitDir) ?? baseSession?.gitDir ?? null,
+    isLinkedWorktree: typeof repository.isLinkedWorktree === "boolean"
+      ? repository.isLinkedWorktree
+      : Boolean(baseSession?.isLinkedWorktree),
     snapshot: action.data ?? null,
     status: "ready",
     loading: false,
