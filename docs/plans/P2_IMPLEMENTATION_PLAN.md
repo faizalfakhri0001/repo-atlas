@@ -2674,9 +2674,9 @@ ORPHANED_BOOKMARK
 
 ## Reflog
 
-- [ ] explicit ref validation;
-- [ ] bounded pagination;
-- [ ] no reset/recovery write.
+- [x] explicit ref validation;
+- [x] bounded pagination;
+- [x] no reset/recovery write.
 
 ## Worktrees
 
@@ -2951,13 +2951,13 @@ main + linked worktree can coexist as separate sessions and share repository met
 
 ## Stage P2-1 — Reflog Backend
 
-- [ ] Reflog command.
-- [ ] Parser.
-- [ ] Action classifier.
-- [ ] Pagination.
-- [ ] Ref validation.
-- [ ] Reachability.
-- [ ] Tests.
+- [x] Reflog command.
+- [x] Parser.
+- [x] Action classifier.
+- [x] Pagination.
+- [x] Ref validation.
+- [x] Reachability.
+- [x] Tests.
 
 ---
 
@@ -3365,15 +3365,15 @@ P2 must not introduce telemetry.
 
 ## Reflog
 
-- [ ] HEAD
-- [ ] local branch
-- [ ] pagination
-- [ ] classification
+- [x] HEAD
+- [x] local branch
+- [x] pagination
+- [x] classification
 - [ ] filters
 - [ ] search
 - [ ] details
 - [ ] compare
-- [ ] reachability
+- [x] reachability
 - [ ] bookmark indicator
 - [ ] auto refresh
 
