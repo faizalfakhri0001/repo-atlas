@@ -2980,21 +2980,21 @@ The bookmark indicator is conditional on bookmark metadata supplied to the view;
 
 ## Stage P2-3 — Saved Views
 
-- [ ] Model.
-- [ ] Schema per view.
-- [ ] Validation.
-- [ ] Persistence.
-- [ ] Save.
-- [ ] Save As.
-- [ ] Update.
-- [ ] Revert.
-- [ ] Rename.
-- [ ] Duplicate.
-- [ ] Pin.
-- [ ] Delete.
-- [ ] Sidebar.
-- [ ] Command Palette.
-- [ ] Tests.
+- [x] Model.
+- [x] Schema per view.
+- [x] Validation.
+- [x] Persistence.
+- [x] Save.
+- [x] Save As.
+- [x] Update.
+- [x] Revert.
+- [x] Rename.
+- [x] Duplicate.
+- [x] Pin.
+- [x] Delete.
+- [x] Sidebar.
+- [x] Command Palette.
+- [x] Tests (unit, component, and IPC; browser end-to-end coverage skipped per request).
 
 ---
 
