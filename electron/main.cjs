@@ -3,6 +3,8 @@ const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const {
   scanRepository,
   getWorktreeDetails,
+  previewWorktreeCreate,
+  createWorktree,
   listRepositoryFiles,
   readRepositoryFile,
   listFileHistory,
@@ -138,6 +140,10 @@ function registerIpcHandlers() {
   const invokeHandlers = {
     "repository:scan": (payload) => scanRepository(payload?.repositoryPath ?? payload),
     "worktree:details": (payload) => getWorktreeDetails(payload?.repositoryPath, payload?.path),
+    "worktree:create-preview": async (payload) => previewWorktreeCreate(payload?.repositoryPath, payload ?? {}, {
+      operationMode: await preferences.getOperationMode(),
+    }),
+    "worktree:create": (payload) => executeWorkspaceOperation(payload, ({ operationMode }) => createWorktree(payload?.repositoryPath, payload ?? {}, { operationMode })),
     "repository:list-files": (payload) => listRepositoryFiles(payload?.repositoryPath ?? payload),
     "repository:file-content": (payload) => readRepositoryFile(payload?.repositoryPath, payload?.path),
     "file:history": (payload) => listFileHistory(payload?.repositoryPath, payload ?? {}),
