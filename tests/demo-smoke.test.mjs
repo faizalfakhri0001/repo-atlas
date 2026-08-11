@@ -97,4 +97,16 @@ test("demo mode exposes a complete read-only repository workflow", async () => {
   const createAttempt = await api.worktreeCreate({ repositoryPath, mode: "detached", targetPath: "/demo/new-worktree", commit: firstCommit.hash });
   assert.equal(createAttempt.ok, false);
   assert.equal(createAttempt.error.code, "DEMO_MODE");
+  const removePreviewAttempt = await api.worktreeRemovePreview({ repositoryPath, path: scan.data.worktrees[0].path });
+  assert.equal(removePreviewAttempt.ok, false);
+  assert.equal(removePreviewAttempt.error.code, "DEMO_MODE");
+  const removeAttempt = await api.worktreeRemove({ repositoryPath, path: scan.data.worktrees[0].path });
+  assert.equal(removeAttempt.ok, false);
+  assert.equal(removeAttempt.error.code, "DEMO_MODE");
+  const prunePreviewAttempt = await api.worktreePrunePreview({ repositoryPath });
+  assert.equal(prunePreviewAttempt.ok, false);
+  assert.equal(prunePreviewAttempt.error.code, "DEMO_MODE");
+  const pruneAttempt = await api.worktreePrune({ repositoryPath });
+  assert.equal(pruneAttempt.ok, false);
+  assert.equal(pruneAttempt.error.code, "DEMO_MODE");
 });

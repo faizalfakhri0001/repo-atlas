@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   ShieldCheck,
+  Trash2,
   Unplug,
   X,
 } from "lucide-react";
@@ -67,6 +68,10 @@ export function WorktreesView({
   const [refreshing, setRefreshing] = useState(false);
   const [copiedPath, setCopiedPath] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [cleanupPreview, setCleanupPreview] = useState(null);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
+  const [cleanupError, setCleanupError] = useState("");
+  const [cleanupMessage, setCleanupMessage] = useState("");
 
   const selectedWorktree = useMemo(
     () => worktrees.find((worktree) => worktree.path === selectedPath) ?? null,
@@ -132,6 +137,93 @@ export function WorktreesView({
     window.setTimeout(() => setCopiedPath((current) => current === worktree.path ? "" : current), 1400);
   };
 
+  const requestRemove = async (worktree) => {
+    if (isDemo) return;
+    setCleanupPreview(null);
+    setCleanupError("");
+    setCleanupMessage("");
+    setCleanupBusy(true);
+    try {
+      if (typeof api.worktreeRemovePreview !== "function") throw new Error("Worktree removal preview is unavailable.");
+      const response = await api.worktreeRemovePreview({
+        sessionId,
+        repositoryPath: repoPath,
+        path: worktree.path,
+        currentWorktreePath,
+      });
+      if (!response?.ok) {
+        setCleanupError(response?.error?.message || "The worktree removal preview failed.");
+        return;
+      }
+      setCleanupPreview({ type: "remove", data: response.data });
+    } catch (error) {
+      setCleanupError(error?.message || "The worktree removal preview failed.");
+    } finally {
+      setCleanupBusy(false);
+    }
+  };
+
+  const requestPrune = async () => {
+    if (isDemo) return;
+    setCleanupPreview(null);
+    setCleanupError("");
+    setCleanupMessage("");
+    setCleanupBusy(true);
+    try {
+      if (typeof api.worktreePrunePreview !== "function") throw new Error("Worktree prune preview is unavailable.");
+      const response = await api.worktreePrunePreview({ sessionId, repositoryPath: repoPath });
+      if (!response?.ok) {
+        setCleanupError(response?.error?.message || "The worktree prune preview failed.");
+        return;
+      }
+      setCleanupPreview({ type: "prune", data: response.data });
+    } catch (error) {
+      setCleanupError(error?.message || "The worktree prune preview failed.");
+    } finally {
+      setCleanupBusy(false);
+    }
+  };
+
+  const confirmCleanup = async () => {
+    if (!cleanupPreview?.data?.allowed || isDemo) return;
+    const isRemove = cleanupPreview.type === "remove";
+    const target = cleanupPreview.data.operation?.targetPath || "the selected worktree";
+    const prompt = isRemove
+      ? `Remove the clean worktree at ${target}?`
+      : `Prune ${cleanupPreview.data.items?.length || 0} stale worktree metadata entr${cleanupPreview.data.items?.length === 1 ? "y" : "ies"}?`;
+    if (typeof window !== "undefined" && typeof window.confirm === "function" && !window.confirm(prompt)) return;
+
+    setCleanupBusy(true);
+    setCleanupError("");
+    setCleanupMessage("");
+    try {
+      const payload = isRemove
+        ? {
+            sessionId,
+            repositoryPath: repoPath,
+            path: target,
+            currentWorktreePath,
+          }
+        : { sessionId, repositoryPath: repoPath };
+      const method = isRemove ? api.worktreeRemove : api.worktreePrune;
+      if (typeof method !== "function") throw new Error(`${isRemove ? "Worktree removal" : "Worktree prune"} is unavailable.`);
+      const response = await method(payload);
+      if (!response?.ok) {
+        setCleanupError(response?.error?.message || `The worktree ${isRemove ? "could not be removed" : "metadata could not be pruned"}.`);
+        return;
+      }
+      const result = response.data ?? response;
+      onOperationTransaction?.(result);
+      setCleanupMessage(isRemove ? "Worktree removed." : `Pruned ${result.items?.length || 0} stale worktree entr${result.items?.length === 1 ? "y" : "ies"}.`);
+      setCleanupPreview(null);
+      await refresh();
+    } catch (error) {
+      setCleanupError(error?.message || `The worktree ${isRemove ? "could not be removed" : "metadata could not be pruned"}.`);
+    } finally {
+      setCleanupBusy(false);
+    }
+  };
+
   const mainWorktrees = worktrees.filter((worktree) => worktree.main || worktree.path === currentWorktreePath);
   const additionalWorktrees = worktrees.filter((worktree) => !mainWorktrees.includes(worktree));
 
@@ -148,6 +240,9 @@ export function WorktreesView({
           </Button>
           <Button variant="outline" size="sm" onClick={refresh} disabled={refreshing}>
             <RefreshCw className={cn(refreshing && "animate-spin")} /> Refresh
+          </Button>
+          <Button variant="outline" size="sm" onClick={requestPrune} disabled={cleanupBusy || isDemo}>
+            <Trash2 /> Prune stale
           </Button>
         </div>
       </div>
@@ -193,6 +288,20 @@ export function WorktreesView({
               onReveal={() => api.revealRepository(selectedWorktree.path)}
               onCompareWithCurrent={() => onCompare?.(currentBranch, worktreeRef(selectedWorktree))}
               onCompareWithDefault={() => onCompare?.(defaultBranch, worktreeRef(selectedWorktree))}
+              onRemove={() => requestRemove(selectedWorktree)}
+              removeDisabled={isDemo || selectedWorktree.exists === false}
+            />
+          )}
+          {(cleanupPreview || cleanupError || cleanupMessage) && (
+            <WorktreeCleanupPreview
+              preview={cleanupPreview}
+              busy={cleanupBusy}
+              error={cleanupError}
+              message={cleanupMessage}
+              isDemo={isDemo}
+              onCancel={() => { setCleanupPreview(null); setCleanupError(""); }}
+              onConfirm={confirmCleanup}
+              onSetOperationMode={onSetOperationMode}
             />
           )}
         </div>
@@ -492,6 +601,53 @@ function PreviewMessages({ label, items, variant }) {
   );
 }
 
+function WorktreeCleanupPreview({ preview, busy, error, message, isDemo, onCancel, onConfirm, onSetOperationMode }) {
+  const data = preview?.data;
+  const isRemove = preview?.type === "remove";
+  const readOnlyBlocked = data?.blockingReasons?.some((reason) => String(reason).startsWith("READ_ONLY_MODE"));
+  return (
+    <Card className="border-amber-500/30 bg-amber-500/[0.03]">
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base"><Trash2 className="size-4 text-amber-400" />{isRemove ? "Remove worktree preview" : "Prune worktree preview"}</CardTitle>
+            <CardDescription className="mt-1">Review the guard results before confirming this local Git metadata operation.</CardDescription>
+          </div>
+          {data && <Badge variant={data.allowed ? "success" : "warning"}>{data.allowed ? "Allowed" : "Blocked"}</Badge>}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {data && isRemove && (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <DetailMetric label="Target" value={data.operation?.targetPath || "—"} mono />
+            <DetailMetric label="Main" value={data.main ? "Yes" : "No"} />
+            <DetailMetric label="Changes" value={data.dirty ? `${data.changes ?? 0} files` : "Clean"} />
+            <DetailMetric label="Locked" value={data.locked ? "Yes" : "No"} />
+          </div>
+        )}
+        {data && !isRemove && data.items?.length > 0 && (
+          <div className="rounded-lg border border-border/70 p-3 text-xs">
+            <div className="mb-2 font-medium">Stale metadata ({data.items.length})</div>
+            <div className="space-y-1">
+              {data.items.slice(0, 12).map((item) => <div key={`${item.path}-${item.raw}`} className="truncate rounded bg-muted/35 px-2 py-1.5" title={item.raw}>{item.path}{item.reason ? ` — ${item.reason}` : ""}</div>)}
+            </div>
+            {data.items.length > 12 && <div className="mt-2 text-muted-foreground">Showing 12 of {data.items.length} entries.</div>}
+          </div>
+        )}
+        {data?.warnings?.length > 0 && <PreviewMessages label="Warnings" items={data.warnings} variant="warning" />}
+        {data?.blockingReasons?.length > 0 && <PreviewMessages label="Blocking reasons" items={data.blockingReasons} variant="destructive" />}
+        {readOnlyBlocked && !isDemo && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-300"><span>Safe Write is required for this operation.</span><Button size="sm" variant="outline" onClick={() => onSetOperationMode?.("safe-write")} disabled={busy}>Enable Safe Write</Button></div>}
+        {error && <div role="alert" className="rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
+        {message && <div role="status" className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-3 text-sm text-emerald-300">{message}</div>}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={onCancel} disabled={busy}>Close</Button>
+          {data?.allowed && <Button variant="destructive" size="sm" onClick={onConfirm} disabled={busy || isDemo}><Trash2 />{busy ? "Working…" : isRemove ? "Confirm remove" : "Confirm prune"}</Button>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function WorktreeGroup({ label, worktrees, selectedPath, details, onSelect }) {
   return (
     <section>
@@ -559,6 +715,8 @@ function WorktreeDetails({
   onReveal,
   onCompareWithCurrent,
   onCompareWithDefault,
+  onRemove,
+  removeDisabled = false,
 }) {
   const status = detail?.status;
   const isCurrent = worktree.path === currentPath;
@@ -609,6 +767,7 @@ function WorktreeDetails({
           <Button variant="outline" size="sm" onClick={onCopy}>{copied ? <Check /> : <Copy />}{copied ? "Copied" : "Copy path"}</Button>
           <Button variant="outline" size="sm" onClick={onCompareWithCurrent} disabled={!canCompare || !currentBranch || isCurrent}><GitCompareArrows /> Compare with current</Button>
           <Button variant="outline" size="sm" onClick={onCompareWithDefault} disabled={!canCompare || !defaultBranch}><GitCompareArrows /> Compare with default</Button>
+          <Button variant="destructive" size="sm" onClick={onRemove} disabled={removeDisabled}><Trash2 /> Remove worktree</Button>
         </div>
       </CardContent>
     </Card>

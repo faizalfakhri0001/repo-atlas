@@ -3,15 +3,19 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorktreesView } from "@/components/worktrees-view";
 
-const { worktreeDetails, revealRepository, chooseWorktreeLocation, worktreeCreatePreview, worktreeCreate } = vi.hoisted(() => ({
+const { worktreeDetails, revealRepository, chooseWorktreeLocation, worktreeCreatePreview, worktreeCreate, worktreeRemovePreview, worktreeRemove, worktreePrunePreview, worktreePrune } = vi.hoisted(() => ({
   worktreeDetails: vi.fn(),
   revealRepository: vi.fn(),
   chooseWorktreeLocation: vi.fn(),
   worktreeCreatePreview: vi.fn(),
   worktreeCreate: vi.fn(),
+  worktreeRemovePreview: vi.fn(),
+  worktreeRemove: vi.fn(),
+  worktreePrunePreview: vi.fn(),
+  worktreePrune: vi.fn(),
 }));
 
-vi.mock("@/lib/api", () => ({ api: { worktreeDetails, revealRepository, chooseWorktreeLocation, worktreeCreatePreview, worktreeCreate } }));
+vi.mock("@/lib/api", () => ({ api: { worktreeDetails, revealRepository, chooseWorktreeLocation, worktreeCreatePreview, worktreeCreate, worktreeRemovePreview, worktreeRemove, worktreePrunePreview, worktreePrune } }));
 
 const main = {
   path: "/workspace/repository",
@@ -192,6 +196,102 @@ describe("WorktreesView", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Create Worktree" }));
+    await user.click(screen.getByRole("button", { name: "Enable Safe Write" }));
+    expect(onSetOperationMode).toHaveBeenCalledWith("safe-write");
+  });
+
+  it("previews and confirms removing a clean linked worktree", async () => {
+    worktreeDetails.mockImplementation(async ({ path }) => ({
+      ok: true,
+      data: {
+        worktree: path === main.path ? main : linked,
+        dirty: false,
+        changes: 0,
+        status: { branch: path === main.path ? "main" : "fix/timezone", oid: path === main.path ? main.head : linked.head, files: [] },
+      },
+    }));
+    worktreeRemovePreview.mockResolvedValue({
+      ok: true,
+      data: {
+        allowed: true,
+        main: false,
+        dirty: false,
+        changes: 0,
+        locked: false,
+        operation: { mode: "remove", targetPath: linked.path },
+        warnings: [],
+        blockingReasons: [],
+      },
+    });
+    worktreeRemove.mockResolvedValue({ ok: true, data: { transactionId: "session-1:2", removedPath: linked.path, worktrees: [main] } });
+    const user = userEvent.setup();
+    const onRefresh = vi.fn();
+    const onOperationTransaction = vi.fn();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(
+      <WorktreesView
+        worktrees={[main, linked]}
+        repoPath="/workspace/repository"
+        currentWorktreePath={main.path}
+        currentBranch="main"
+        defaultBranch="main"
+        sessionId="session-1"
+        operationMode="safe-write"
+        onOperationTransaction={onOperationTransaction}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /repository-hotfix/ }));
+    await user.click(await screen.findByRole("button", { name: "Remove worktree" }));
+    await waitFor(() => expect(worktreeRemovePreview).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: "session-1",
+      repositoryPath: "/workspace/repository",
+      path: linked.path,
+      currentWorktreePath: main.path,
+    })));
+    expect(await screen.findByText("Remove worktree preview")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirm remove" }));
+    await waitFor(() => expect(worktreeRemove).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: "session-1",
+      repositoryPath: "/workspace/repository",
+      path: linked.path,
+      currentWorktreePath: main.path,
+    })));
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(onOperationTransaction).toHaveBeenCalledWith(expect.objectContaining({ transactionId: "session-1:2" }));
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
+    confirmSpy.mockRestore();
+  });
+
+  it("shows prune preview guards and safe-write action", async () => {
+    worktreeDetails.mockResolvedValue({ ok: true, data: { worktree: main, dirty: false, changes: 0, status: null } });
+    worktreePrunePreview.mockResolvedValue({
+      ok: true,
+      data: {
+        allowed: false,
+        items: [{ path: "worktrees/stale", reason: "missing" }],
+        warnings: [],
+        blockingReasons: ["READ_ONLY_MODE — Enable Safe Write before pruning stale worktree metadata."],
+      },
+    });
+    const user = userEvent.setup();
+    const onSetOperationMode = vi.fn();
+    render(
+      <WorktreesView
+        worktrees={[main]}
+        repoPath="/workspace/repository"
+        currentWorktreePath={main.path}
+        currentBranch="main"
+        defaultBranch="main"
+        operationMode="read-only"
+        onSetOperationMode={onSetOperationMode}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Prune stale" }));
+    await waitFor(() => expect(worktreePrunePreview).toHaveBeenCalledWith(expect.objectContaining({ repositoryPath: "/workspace/repository" })));
+    expect(await screen.findByText("Prune worktree preview")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Enable Safe Write" }));
     expect(onSetOperationMode).toHaveBeenCalledWith("safe-write");
   });

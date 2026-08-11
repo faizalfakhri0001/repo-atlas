@@ -1322,6 +1322,10 @@ export function createDemoApi() {
     scanRepository: () => ok(scanData()),
     worktreeCreatePreview: demoWriteError,
     worktreeCreate: demoWriteError,
+    worktreeRemovePreview: demoWriteError,
+    worktreeRemove: demoWriteError,
+    worktreePrunePreview: demoWriteError,
+    worktreePrune: demoWriteError,
     worktreeDetails: ({ path: requestedPath } = {}) => {
       const worktree = demoWorktrees.find((candidate) => candidate.path === requestedPath);
       if (!worktree) return Promise.resolve({ ok: false, error: { message: "The selected path is not a registered Git worktree.", code: "WORKTREE_NOT_FOUND" } });
