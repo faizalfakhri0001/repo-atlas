@@ -1,4 +1,11 @@
+const fs = require("node:fs/promises");
+const crypto = require("node:crypto");
+const path = require("node:path");
+
 const CURRENT_METADATA_VERSION = 2;
+const METADATA_DIRECTORY_NAME = "repo-atlas";
+const REPOSITORY_DIRECTORY_NAME = "repositories";
+const MAX_METADATA_BYTES = 8 * 1024 * 1024;
 const REPOSITORY_ID_PATTERN = /^[0-9a-f]{64}$/;
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,64}$/i;
 const VIEW_TYPES = new Set([
@@ -353,12 +360,230 @@ function createEmptyMetadata(identity, now = new Date().toISOString()) {
   };
 }
 
+function resolveUserDataPath(userDataPath) {
+  const value = typeof userDataPath === "function" ? userDataPath() : userDataPath;
+  if (typeof value !== "string" || !value.trim()) {
+    throw new TypeError("A user data directory is required.");
+  }
+  return path.resolve(value);
+}
+
+function createRepositoryMetadataStore({ userDataPath, now = () => new Date().toISOString() } = {}) {
+  if (typeof userDataPath !== "string" && typeof userDataPath !== "function") {
+    throw new TypeError("A user data directory is required.");
+  }
+
+  function getPaths(repositoryId) {
+    const normalizedId = normalizeText(repositoryId, 64);
+    if (!normalizedId || !REPOSITORY_ID_PATTERN.test(normalizedId)) {
+      throw new MetadataValidationError("A valid repository ID is required.");
+    }
+    const directory = path.join(resolveUserDataPath(userDataPath), METADATA_DIRECTORY_NAME, REPOSITORY_DIRECTORY_NAME);
+    const filePath = path.join(directory, `${normalizedId}.json`);
+    return {
+      directory,
+      filePath,
+      backupPath: `${filePath}.bak`,
+    };
+  }
+
+  async function readCandidate(filePath, identity) {
+    let raw;
+    try {
+      raw = await fs.readFile(filePath, "utf8");
+    } catch (error) {
+      if (error?.code === "ENOENT") return { kind: "missing" };
+      return { kind: "invalid", error };
+    }
+
+    if (Buffer.byteLength(raw, "utf8") > MAX_METADATA_BYTES) {
+      return {
+        kind: "invalid",
+        error: new MetadataValidationError("Repository metadata exceeds the supported size."),
+      };
+    }
+
+    let value;
+    try {
+      value = JSON.parse(raw);
+    } catch (error) {
+      return { kind: "invalid", error };
+    }
+
+    try {
+      const normalized = normalizeMetadata(value, identity, now);
+      return { kind: "valid", ...normalized };
+    } catch (error) {
+      return { kind: "invalid", error };
+    }
+  }
+
+  async function replaceFile(tempPath, targetPath) {
+    try {
+      await fs.rename(tempPath, targetPath);
+    } catch (error) {
+      if (![
+        "EEXIST",
+        "EPERM",
+      ].includes(error?.code)) throw error;
+      await fs.rm(targetPath, { force: true });
+      await fs.rename(tempPath, targetPath);
+    }
+  }
+
+  async function writeAtomically(metadata, identity, { createBackup = true } = {}) {
+    const paths = getPaths(identity.repositoryId);
+    const serialized = `${JSON.stringify(metadata, null, 2)}\n`;
+    if (Buffer.byteLength(serialized, "utf8") > MAX_METADATA_BYTES) {
+      throw new MetadataValidationError("Repository metadata exceeds the supported size.");
+    }
+
+    await fs.mkdir(paths.directory, { recursive: true, mode: 0o700 });
+    const temporaryPath = path.join(
+      paths.directory,
+      `.${identity.repositoryId}.tmp-${process.pid}-${crypto.randomBytes(8).toString("hex")}`,
+    );
+    let handle = null;
+    try {
+      handle = await fs.open(temporaryPath, "wx", 0o600);
+      await handle.writeFile(serialized, "utf8");
+      await handle.sync();
+      await handle.close();
+      handle = null;
+
+      if (createBackup) {
+        const previous = await readCandidate(paths.filePath, identity);
+        if (previous.kind === "valid") await fs.copyFile(paths.filePath, paths.backupPath);
+      }
+      await replaceFile(temporaryPath, paths.filePath);
+    } finally {
+      if (handle) {
+        try {
+          await handle.close();
+        } catch {
+          // The original write error is more useful to the caller.
+        }
+      }
+      try {
+        await fs.rm(temporaryPath, { force: true });
+      } catch {
+        // Best effort cleanup for a failed write.
+      }
+    }
+  }
+
+  function identityFromMetadata(metadata) {
+    if (!isPlainObject(metadata) || !isPlainObject(metadata.repository)) {
+      throw new MetadataValidationError("Repository metadata has no valid repository identity.");
+    }
+    return normalizeRepositoryIdentity({
+      repositoryId: metadata.repository.id,
+      commonGitDir: metadata.repository.commonGitDir,
+      lastKnownName: metadata.repository.lastKnownName,
+    });
+  }
+
+  async function save(metadata, options = {}) {
+    const identity = identityFromMetadata(metadata);
+    const normalized = normalizeMetadata(metadata, identity, now);
+    const cleanMetadata = {
+      ...normalized.metadata,
+      updatedAt: resolveTimestamp(now),
+    };
+    await writeAtomically(cleanMetadata, identity, options);
+    return cleanMetadata;
+  }
+
+  async function load(identityInput) {
+    const identity = normalizeRepositoryIdentity(identityInput);
+    const paths = getPaths(identity.repositoryId);
+    const primary = await readCandidate(paths.filePath, identity);
+    if (primary.kind === "valid") {
+      const shouldRepair = primary.migrated || primary.issues.length > 0;
+      let warning = null;
+      if (shouldRepair) {
+        try {
+          await writeAtomically(
+            {
+              ...primary.metadata,
+              updatedAt: resolveTimestamp(now),
+            },
+            identity,
+          );
+        } catch {
+          warning = "Repository metadata was loaded, but its repaired copy could not be saved.";
+        }
+      }
+      return {
+        metadata: primary.metadata,
+        source: "primary",
+        recovered: false,
+        migrated: primary.migrated,
+        repaired: primary.issues.length > 0,
+        issues: primary.issues,
+        warning,
+      };
+    }
+
+    const backup = await readCandidate(paths.backupPath, identity);
+    if (backup.kind === "valid") {
+      let warning = "The primary metadata file was unavailable; the last valid backup was loaded.";
+      try {
+        await writeAtomically(
+          {
+            ...backup.metadata,
+            updatedAt: resolveTimestamp(now),
+          },
+          identity,
+          { createBackup: false },
+        );
+      } catch {
+        warning = "The last valid metadata backup was loaded, but the primary copy could not be repaired.";
+      }
+      return {
+        metadata: backup.metadata,
+        source: "backup",
+        recovered: true,
+        migrated: backup.migrated,
+        repaired: backup.issues.length > 0,
+        issues: backup.issues,
+        warning,
+      };
+    }
+
+    return {
+      metadata: createEmptyMetadata(identity, now),
+      source: "default",
+      recovered: false,
+      migrated: false,
+      repaired: false,
+      issues: [],
+      warning: "Local repository metadata could not be fully loaded; default metadata was used.",
+    };
+  }
+
+  async function reset(identityInput) {
+    const identity = normalizeRepositoryIdentity(identityInput);
+    const paths = getPaths(identity.repositoryId);
+    await Promise.all([
+      fs.rm(paths.filePath, { force: true }),
+      fs.rm(paths.backupPath, { force: true }),
+    ]);
+  }
+
+  return { getPaths: (identity) => getPaths(normalizeRepositoryIdentity(identity).repositoryId), load, reset, save };
+}
+
 module.exports = {
   COMMIT_HASH_PATTERN,
   CURRENT_METADATA_VERSION,
+  MAX_METADATA_BYTES,
+  METADATA_DIRECTORY_NAME,
   MetadataValidationError,
   REPOSITORY_ID_PATTERN,
+  REPOSITORY_DIRECTORY_NAME,
   VIEW_TYPES: [...VIEW_TYPES],
+  createRepositoryMetadataStore,
   createEmptyMetadata,
   looksLikeLegacyMetadata,
   migrateV1Metadata,
