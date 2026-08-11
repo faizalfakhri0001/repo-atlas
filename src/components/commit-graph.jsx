@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  Bookmark,
   Cherry,
   ChevronDown,
   CircleDot,
@@ -13,7 +14,9 @@ import {
   ListFilter,
   LoaderCircle,
   LocateFixed,
+  MessageSquare,
   Search,
+  Star,
   X,
 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -97,7 +100,19 @@ function useContainerSize(ref) {
   return size;
 }
 
-export function CommitGraph({ data, onCompare, onCherryPick, onShowWorkspace, graphRequest }) {
+export function CommitGraph({
+  data,
+  onCompare,
+  onCherryPick,
+  onShowWorkspace,
+  graphRequest,
+  bookmarks = [],
+  notes = [],
+  onOpenBookmarkEditor,
+  onRemoveBookmark,
+  onOpenNoteEditor,
+  onRemoveNote,
+}) {
   const repoPath = data.repository.rootPath;
   const remoteNames = useMemo(() => data.remotes.map((remote) => remote.name), [data.remotes]);
 
@@ -122,6 +137,8 @@ export function CommitGraph({ data, onCompare, onCherryPick, onShowWorkspace, gr
   const { height: viewHeight } = useContainerSize(containerRef);
 
   const { rows, maxLanes } = useMemo(() => buildGraph(commits), [commits]);
+  const bookmarkByHash = useMemo(() => new Map(bookmarks.map((bookmark) => [bookmark.commitHash, bookmark])), [bookmarks]);
+  const noteByHash = useMemo(() => new Map(notes.map((note) => [note.targetId, note])), [notes]);
   const indexByHash = useMemo(() => {
     const map = new Map();
     rows.forEach((row, index) => map.set(row.commit.hash, index));
@@ -495,6 +512,8 @@ export function CommitGraph({ data, onCompare, onCherryPick, onShowWorkspace, gr
                   const commit = row.commit;
                   const isSelected = selected.has(commit.hash);
                   const isHead = commit.hash === data.repository.head;
+                  const bookmark = bookmarkByHash.get(commit.hash);
+                  const note = noteByHash.get(commit.hash);
                   const dimmed = matchSet && !matchSet.has(index);
                   const isActiveMatch = matchSet && matches[matchCursor] === index;
                   return (
@@ -519,6 +538,7 @@ export function CommitGraph({ data, onCompare, onCherryPick, onShowWorkspace, gr
                           />
                           <GraphRow row={row} width={graphWidth} isHead={isHead} />
                           <div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1">
+                            {bookmark && <Star className="size-3.5 shrink-0 fill-amber-400 text-amber-400" title="Bookmarked commit" aria-label="Bookmarked commit" />}
                             <RefChipList
                               refs={commit.refs}
                               remotes={remoteNames}
@@ -559,6 +579,22 @@ export function CommitGraph({ data, onCompare, onCherryPick, onShowWorkspace, gr
                         <ContextMenuItem onSelect={() => copyText(commit.subject)}>
                           <Copy /> Copy message
                         </ContextMenuItem>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem
+                          onSelect={() => bookmark ? onRemoveBookmark?.(bookmark) : onOpenBookmarkEditor?.(commit.hash)}
+                          disabled={bookmark ? !onRemoveBookmark : !onOpenBookmarkEditor}
+                        >
+                          {bookmark ? <Star className="fill-amber-400 text-amber-400" /> : <Bookmark />}
+                          {bookmark ? "Remove bookmark" : "Add bookmark"}
+                        </ContextMenuItem>
+                        <ContextMenuItem onSelect={() => onOpenNoteEditor?.(commit.hash)} disabled={!onOpenNoteEditor}>
+                          <MessageSquare /> {note ? "Edit local note" : "Add local note"}
+                        </ContextMenuItem>
+                        {note && onRemoveNote && (
+                          <ContextMenuItem onSelect={() => onRemoveNote(note)}>
+                            <MessageSquare /> Remove local note
+                          </ContextMenuItem>
+                        )}
                         <ContextMenuSeparator />
                         <ContextMenuItem
                           onSelect={() =>
@@ -659,6 +695,12 @@ export function CommitGraph({ data, onCompare, onCherryPick, onShowWorkspace, gr
             }}
             onCherryPick={onCherryPick}
             onCompareWithHead={(hash) => onCompare(hash, data.repository.head)}
+            bookmark={bookmarkByHash.get(detailHash) ?? null}
+            note={noteByHash.get(detailHash) ?? null}
+            onOpenBookmarkEditor={onOpenBookmarkEditor}
+            onRemoveBookmark={onRemoveBookmark}
+            onOpenNoteEditor={onOpenNoteEditor}
+            onRemoveNote={onRemoveNote}
           />
         </div>
       )}

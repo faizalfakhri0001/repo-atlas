@@ -51,7 +51,9 @@ import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { HealthView } from "@/features/health";
 import { GlobalSearch } from "@/features/search";
 import { CherryPickDialog } from "@/components/cherry-pick-dialog";
+import { BookmarkDialog, LocalNoteEditor } from "@/components/local-metadata-dialogs";
 import { StateBanner } from "@/features/repository";
+import { useLocalMetadata } from "@/features/local-metadata";
 import {
   CommandPalette,
   createCommandRegistry,
@@ -155,7 +157,11 @@ export function AppShell({
   const [openedSavedViewId, setOpenedSavedViewId] = useState(null);
   const [savedViewDialog, setSavedViewDialog] = useState(null);
   const [savedViewActionError, setSavedViewActionError] = useState(null);
+  const [localMetadataDialog, setLocalMetadataDialog] = useState(null);
+  const [localMetadataBusy, setLocalMetadataBusy] = useState(false);
+  const [localMetadataActionError, setLocalMetadataActionError] = useState(null);
   const savedViewsState = useSavedViews({ repositoryPath: data?.repository.rootPath });
+  const localMetadataState = useLocalMetadata({ repositoryPath: data?.repository.rootPath });
   const currentSavedView = useMemo(
     () => getCurrentSavedViewSnapshot({
       activeView,
@@ -340,6 +346,73 @@ export function AppShell({
       setSavedViewActionError(actionError?.message ?? "Saved view could not be deleted.");
     }
   }, [openedSavedViewId, savedViewsState]);
+
+  const openBookmarkEditor = useCallback((hash) => {
+    if (!hash) return;
+    setLocalMetadataActionError(null);
+    setLocalMetadataDialog({ type: "bookmark", hash });
+  }, []);
+  const openNoteEditor = useCallback((hash) => {
+    if (!hash) return;
+    setLocalMetadataActionError(null);
+    setLocalMetadataDialog({ type: "note", hash });
+  }, []);
+  const activeMetadataBookmark = useMemo(
+    () => localMetadataDialog?.type === "bookmark"
+      ? localMetadataState.bookmarks.find((bookmark) => bookmark.commitHash === localMetadataDialog.hash) ?? null
+      : null,
+    [localMetadataDialog, localMetadataState.bookmarks],
+  );
+  const activeMetadataNote = useMemo(
+    () => localMetadataDialog?.type === "note"
+      ? localMetadataState.notes.find((note) => note.targetId === localMetadataDialog.hash) ?? null
+      : null,
+    [localMetadataDialog, localMetadataState.notes],
+  );
+  const handleBookmarkSubmit = useCallback(async (fields) => {
+    if (!localMetadataDialog?.hash) return;
+    setLocalMetadataBusy(true);
+    setLocalMetadataActionError(null);
+    try {
+      if (activeMetadataBookmark) await localMetadataState.updateBookmark({ id: activeMetadataBookmark.id, ...fields });
+      else await localMetadataState.createBookmark({ commitHash: localMetadataDialog.hash, ...fields });
+      setLocalMetadataDialog(null);
+    } catch (actionError) {
+      setLocalMetadataActionError(actionError?.message ?? "Bookmark could not be saved.");
+    } finally {
+      setLocalMetadataBusy(false);
+    }
+  }, [activeMetadataBookmark, localMetadataDialog, localMetadataState]);
+  const handleNoteSubmit = useCallback(async (fields) => {
+    if (!localMetadataDialog?.hash) return;
+    setLocalMetadataBusy(true);
+    setLocalMetadataActionError(null);
+    try {
+      if (activeMetadataNote) await localMetadataState.updateNote({ id: activeMetadataNote.id, ...fields });
+      else await localMetadataState.createNote({ targetType: "commit", targetId: localMetadataDialog.hash, ...fields });
+      setLocalMetadataDialog(null);
+    } catch (actionError) {
+      setLocalMetadataActionError(actionError?.message ?? "Note could not be saved.");
+    } finally {
+      setLocalMetadataBusy(false);
+    }
+  }, [activeMetadataNote, localMetadataDialog, localMetadataState]);
+  const removeBookmark = useCallback(async (bookmark) => {
+    if (!bookmark?.id) return;
+    try {
+      await localMetadataState.deleteBookmark(bookmark.id);
+    } catch (actionError) {
+      setLocalMetadataActionError(actionError?.message ?? "Bookmark could not be removed.");
+    }
+  }, [localMetadataState]);
+  const removeNote = useCallback(async (note) => {
+    if (!note?.id) return;
+    try {
+      await localMetadataState.deleteNote(note.id);
+    } catch (actionError) {
+      setLocalMetadataActionError(actionError?.message ?? "Note could not be removed.");
+    }
+  }, [localMetadataState]);
 
   const commandContext = useMemo(
     () => ({
@@ -680,6 +753,11 @@ export function AppShell({
                       onToggleSavedViewPin={toggleSavedViewPin}
                       onDeleteSavedView={deleteSavedView}
                       onCreateSavedView={() => openSaveDialog("create")}
+                      localMetadata={loadedSession.id === selectedSessionId ? localMetadataState : null}
+                      onOpenBookmarkEditor={loadedSession.id === selectedSessionId ? openBookmarkEditor : undefined}
+                      onRemoveBookmark={loadedSession.id === selectedSessionId ? removeBookmark : undefined}
+                      onOpenNoteEditor={loadedSession.id === selectedSessionId ? openNoteEditor : undefined}
+                      onRemoveNote={loadedSession.id === selectedSessionId ? removeNote : undefined}
                     />
                   </div>
                 </div>
@@ -741,6 +819,26 @@ export function AppShell({
           onSubmit={handleSavedViewDialogSubmit}
         />
       )}
+      {localMetadataActionError && (
+        <div role="alert" className="fixed bottom-4 left-1/2 z-[60] -translate-x-1/2 rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-2 text-xs text-red-300 shadow-xl">
+          {localMetadataActionError}
+        </div>
+      )}
+      <BookmarkDialog
+        open={localMetadataDialog?.type === "bookmark"}
+        onOpenChange={(open) => { if (!open && !localMetadataBusy) { setLocalMetadataDialog(null); setLocalMetadataActionError(null); } }}
+        bookmark={activeMetadataBookmark}
+        commitHash={localMetadataDialog?.hash}
+        pending={localMetadataBusy}
+        onSubmit={handleBookmarkSubmit}
+      />
+      <LocalNoteEditor
+        open={localMetadataDialog?.type === "note"}
+        onOpenChange={(open) => { if (!open && !localMetadataBusy) { setLocalMetadataDialog(null); setLocalMetadataActionError(null); } }}
+        note={activeMetadataNote}
+        pending={localMetadataBusy}
+        onSubmit={handleNoteSubmit}
+      />
     </TooltipProvider>
   );
 }
@@ -784,6 +882,11 @@ function ViewHost({
   onToggleSavedViewPin,
   onDeleteSavedView,
   onCreateSavedView,
+  localMetadata,
+  onOpenBookmarkEditor,
+  onRemoveBookmark,
+  onOpenNoteEditor,
+  onRemoveNote,
 }) {
   const effectiveGraphRequest = navigationRequest?.view === "commits"
     ? { ...navigationRequest.payload, query: navigationRequest.payload?.search ?? navigationRequest.payload?.query, nonce: navigationRequest.nonce }
@@ -805,6 +908,12 @@ function ViewHost({
           onCompare={onCompare}
           onCherryPick={onCherryPick}
           onShowWorkspace={onShowWorkspace}
+          bookmarks={localMetadata?.bookmarks}
+          notes={localMetadata?.notes}
+          onOpenBookmarkEditor={onOpenBookmarkEditor}
+          onRemoveBookmark={onRemoveBookmark}
+          onOpenNoteEditor={onOpenNoteEditor}
+          onRemoveNote={onRemoveNote}
         />
       </div>
       <div className={cn("h-full", view !== "compare" && "hidden")}>
@@ -850,6 +959,7 @@ function ViewHost({
           onOpenCommit={onFocusCommit}
           onOpenFileAtRevision={onOpenFileAtRevision}
           onOpenPreviousRevision={onOpenPreviousRevision}
+          bookmarkedHashes={localMetadata?.bookmarkedHashes}
         />
       )}
       {view === "hotspots" && <HotspotsView repoPath={data.repository.rootPath} onOpenFileHistory={onOpenFileHistory} initialFilter={hotspotFilter} initialConfig={navigationRequest?.view === "hotspots" ? navigationRequest.payload : null} />}
@@ -866,6 +976,7 @@ function ViewHost({
           initialConfig={navigationRequest?.view === "reflog" ? navigationRequest.payload : null}
           onViewCommit={onFocusCommit}
           onCompare={onCompare}
+          bookmarkedHashes={localMetadata?.bookmarkedHashes}
         />
       )}
       {view === "refs" && <RefsView data={data} />}

@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
+  Bookmark,
   Cherry,
   GitCompareArrows,
   GitMerge,
   LoaderCircle,
+  MessageSquare,
+  Pencil,
   ShieldCheck,
+  Star,
+  Trash2,
   X,
 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -29,6 +34,12 @@ export function CommitDetails({
   onNavigate,
   onCherryPick,
   onCompareWithHead,
+  bookmark = null,
+  note = null,
+  onOpenBookmarkEditor,
+  onRemoveBookmark,
+  onOpenNoteEditor,
+  onRemoveNote,
   className,
 }) {
   const [state, setState] = useState({ loading: true, error: null, data: null });
@@ -80,15 +91,35 @@ export function CommitDetails({
             </>
           )}
         </div>
-        {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
-            <X className="size-4" />
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {!openFile && details && (bookmark ? onRemoveBookmark || onOpenBookmarkEditor : onOpenBookmarkEditor) && (
+            <>
+              <Button
+                size="sm"
+                variant={bookmark ? "secondary" : "outline"}
+                className="h-7 px-2 text-xs"
+                onClick={() => bookmark ? onRemoveBookmark?.(bookmark) : onOpenBookmarkEditor?.(details.hash)}
+                aria-label={bookmark ? "Remove bookmark" : "Add bookmark"}
+              >
+                {bookmark ? <Star className="fill-amber-400 text-amber-400" /> : <Bookmark />} {bookmark ? "Bookmarked" : "Bookmark"}
+              </Button>
+              {bookmark && onOpenBookmarkEditor && (
+                <Button size="icon" variant="ghost" className="size-7" onClick={() => onOpenBookmarkEditor(details.hash)} title="Edit bookmark" aria-label="Edit bookmark">
+                  <Pencil />
+                </Button>
+              )}
+            </>
+          )}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {state.loading ? (
@@ -181,6 +212,31 @@ export function CommitDetails({
                   <Button size="sm" variant="outline" onClick={() => onCompareWithHead(details.hash)}>
                     <GitCompareArrows /> Diff vs HEAD
                   </Button>
+                )}
+              </div>
+            )}
+            {(note || onOpenNoteEditor) && (
+              <div className="space-y-2 rounded-lg border border-border/70 p-3">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="size-3.5 text-primary" />
+                  <span className="text-xs font-medium">Local note</span>
+                  <span className="flex-1" />
+                  {note ? (
+                    <>
+                      {onOpenNoteEditor && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => onOpenNoteEditor(details.hash)}><Pencil /> Edit</Button>}
+                      {onRemoveNote && <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-red-400" onClick={() => onRemoveNote(note)} title="Remove local note" aria-label="Remove local note"><Trash2 /></Button>}
+                    </>
+                  ) : (
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => onOpenNoteEditor?.(details.hash)}><MessageSquare /> Add note</Button>
+                  )}
+                </div>
+                {note ? (
+                  <div className="rounded-md bg-muted/40 p-2.5">
+                    {note.title && <div className="mb-1 text-xs font-medium">{note.title}</div>}
+                    <pre className="whitespace-pre-wrap break-words font-sans text-xs leading-5 text-muted-foreground">{note.body}</pre>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Add private context for this commit.</p>
                 )}
               </div>
             )}
