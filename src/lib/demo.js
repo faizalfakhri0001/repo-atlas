@@ -28,7 +28,18 @@ function readDemoSavedViews(repositoryPath) {
   if (!storage) return [];
   try {
     const parsed = JSON.parse(storage.getItem(DEMO_SAVED_VIEWS_STORAGE_KEY) || "{}");
-    return Array.isArray(parsed?.[repositoryPath]) ? parsed[repositoryPath].slice(0, 1000) : [];
+    if (!Array.isArray(parsed?.[repositoryPath])) return [];
+    return parsed[repositoryPath]
+      .slice(0, 1000)
+      .filter((view) => view && typeof view.id === "string" && typeof view.name === "string" && DEMO_SAVED_VIEW_TYPES.has(view.viewType) && view.config && typeof view.config === "object" && !Array.isArray(view.config))
+      .map((view) => ({
+        ...view,
+        name: view.name.trim().slice(0, 80),
+        config: cloneDemoValue(view.config) ?? {},
+        pinned: Boolean(view.pinned),
+        configVersion: Number(view.configVersion) || 1,
+      }))
+      .filter((view) => view.name.length > 0);
   } catch {
     return [];
   }

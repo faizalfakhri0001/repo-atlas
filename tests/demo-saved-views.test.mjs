@@ -23,3 +23,30 @@ test("demo mode supports saved view CRUD without repository writes", async () =>
   assert.equal(removed.ok, true);
   assert.deepEqual(removed.data.savedViews, []);
 });
+
+test("demo mode ignores malformed browser metadata", async () => {
+  const previous = globalThis.localStorage;
+  const storage = new Map([
+    ["repo-atlas-demo-metadata-v1", JSON.stringify({
+      "/demo/acme-storefront": [
+        { id: "broken", name: "", viewType: "unknown", config: null },
+        { id: "valid", name: "Valid", viewType: "commits", config: {}, pinned: true },
+      ],
+    })],
+  ]);
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
+    },
+  });
+  try {
+    const listed = await createDemoApi().listSavedViews();
+    assert.equal(listed.data.savedViews.length, 1);
+    assert.equal(listed.data.savedViews[0].id, "valid");
+  } finally {
+    if (previous === undefined) delete globalThis.localStorage;
+    else Object.defineProperty(globalThis, "localStorage", { configurable: true, value: previous });
+  }
+});
