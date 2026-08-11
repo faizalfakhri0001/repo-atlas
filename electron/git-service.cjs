@@ -36,7 +36,7 @@ const MAX_CHERRY_PICK_COMMITS = 50;
 const MAX_CONFLICT_PREDICTIONS = 25;
 const MAX_DIFF_BYTES = 1_200_000;
 const COMMIT_FORMAT = "--pretty=format:%H%x1f%P%x1f%D%x1f%an%x1f%ae%x1f%ad%x1f%s%x1e";
-const PARTIAL_REFRESH_PARTS = new Set(["status", "refs", "head", "state"]);
+const PARTIAL_REFRESH_PARTS = new Set(["status", "refs", "head", "state", "worktrees"]);
 const MAX_WORKSPACE_OPERATION_PATHS = 200;
 
 function parseNullFields(line, expected) {
@@ -96,11 +96,14 @@ function parseWorktrees(raw) {
       const result = {
         path: "",
         head: "",
+        shortHead: "",
         branch: "",
         bare: false,
         detached: false,
         locked: false,
+        lockReason: "",
         prunable: false,
+        pruneReason: "",
         reason: "",
       };
 
@@ -108,22 +111,50 @@ function parseWorktrees(raw) {
         const [key, ...rest] = line.split(" ");
         const value = rest.join(" ");
         if (key === "worktree") result.path = value;
-        if (key === "HEAD") result.head = value;
+        if (key === "HEAD") {
+          result.head = value;
+          result.shortHead = value.slice(0, 8);
+        }
         if (key === "branch") result.branch = value.replace(/^refs\/heads\//, "");
         if (key === "bare") result.bare = true;
         if (key === "detached") result.detached = true;
         if (key === "locked") {
           result.locked = true;
+          result.lockReason = value;
           result.reason = value;
         }
         if (key === "prunable") {
           result.prunable = true;
-          result.reason = value;
+          result.pruneReason = value;
+          result.reason = result.lockReason || value;
         }
       }
 
       return result;
     });
+}
+
+async function decorateWorktrees(worktrees, mainPath = "") {
+  const fallbackMainPath = mainPath || worktrees[0]?.path || "";
+  const normalizedMainPath = fallbackMainPath ? path.resolve(fallbackMainPath) : "";
+  return Promise.all(
+    worktrees.map(async (worktree, index) => {
+      const normalizedPath = path.resolve(worktree.path);
+      let exists = false;
+      try {
+        const stats = await fs.stat(normalizedPath);
+        exists = stats.isDirectory();
+      } catch {
+        exists = false;
+      }
+      return {
+        ...worktree,
+        path: normalizedPath,
+        main: normalizedMainPath ? normalizedPath === normalizedMainPath : index === 0,
+        exists,
+      };
+    }),
+  );
 }
 
 function parseSubmoduleConfig(pathRaw, urlRaw) {
@@ -1209,7 +1240,8 @@ async function scanRepository(candidatePath) {
       }, []),
       safe(async () => {
         const result = await runGit(cwd, ["worktree", "list", "--porcelain"]);
-        return parseWorktrees(result.stdout);
+        const mainPath = path.basename(repository.commonGitDir) === ".git" ? path.dirname(repository.commonGitDir) : "";
+        return decorateWorktrees(parseWorktrees(result.stdout), mainPath);
       }, []),
       safe(async () => {
         const result = await runGit(cwd, ["remote", "-v"]);
@@ -1345,6 +1377,12 @@ async function readPartialStatus(repository) {
   return { status, state, repository: buildPartialRepository(repository, status) };
 }
 
+async function readPartialWorktrees(repository) {
+  const result = await runGit(repository.rootPath, ["worktree", "list", "--porcelain"]);
+  const mainPath = path.basename(repository.commonGitDir) === ".git" ? path.dirname(repository.commonGitDir) : "";
+  return decorateWorktrees(parseWorktrees(result.stdout), mainPath);
+}
+
 async function readPartialRefs(repository, currentBranch) {
   const [branches, tags, commits, contributors, totalCommits, originHead] = await Promise.all([
     safe(async () => {
@@ -1416,6 +1454,9 @@ async function refreshRepositoryPartial(repositoryPath, requestedParts = []) {
       },
     });
   }
+  if (parts.includes("worktrees")) {
+    data.worktrees = await readPartialWorktrees(repository);
+  }
   if (parts.includes("head") && !data.commits) {
     const result = await runGit(repository.rootPath, ["log", "--all", "--topo-order", "--date=iso-strict", "-n", String(DEFAULT_COMMIT_LIMIT), COMMIT_FORMAT]);
     data.commits = parseCommits(result.stdout);
@@ -1442,6 +1483,7 @@ module.exports = {
   parseBranches,
   parseCommits,
   parseWorktrees,
+  decorateWorktrees,
   parseSubmoduleConfig,
   parseSubmoduleStatus,
   parseStatus,

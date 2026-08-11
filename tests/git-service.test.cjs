@@ -63,6 +63,7 @@ test("parseWorktrees reads porcelain blocks", () => {
   const worktrees = parseWorktrees(raw);
   assert.equal(worktrees.length, 2);
   assert.equal(worktrees[0].branch, "main");
+  assert.equal(worktrees[0].shortHead, "11111111");
   assert.equal(worktrees[1].detached, true);
 });
 
@@ -176,8 +177,15 @@ test("scanRepository resolves a linked worktree as its own repository context", 
   assert.equal(result.repository.currentBranch, "feature/linked");
   assert.equal(result.repository.dirty, false);
   assert.equal(result.worktrees.length, 2);
-  assert.ok(result.worktrees.some((worktree) => worktree.path === resolvedLinked && worktree.branch === "feature/linked"));
-  assert.ok(result.worktrees.some((worktree) => worktree.path === resolvedRoot && worktree.branch === "main"));
+  const linkedWorktree = result.worktrees.find((worktree) => worktree.path === resolvedLinked);
+  const mainWorktree = result.worktrees.find((worktree) => worktree.path === resolvedRoot);
+  assert.equal(linkedWorktree.branch, "feature/linked");
+  assert.equal(linkedWorktree.exists, true);
+  assert.equal(linkedWorktree.main, false);
+  assert.equal(mainWorktree.branch, "main");
+  assert.equal(mainWorktree.exists, true);
+  assert.equal(mainWorktree.main, true);
+  assert.equal(mainWorktree.shortHead, mainWorktree.head.slice(0, 8));
 });
 
 test("scanRepository reports an initialized submodule without traversing into it", async (t) => {
