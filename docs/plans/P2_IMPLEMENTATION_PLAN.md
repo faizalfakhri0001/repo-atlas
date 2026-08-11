@@ -3072,15 +3072,16 @@ The bookmark indicator is conditional on bookmark metadata supplied to the view;
 
 ## Stage P2-9 — Worktree Remove / Prune
 
-- [ ] Remove preview.
-- [ ] Main guard.
-- [ ] Dirty guard.
-- [ ] Lock guard.
-- [ ] Remove.
-- [ ] Prune dry-run.
-- [ ] Prune.
-- [ ] Confirmation.
-- [ ] Tests.
+- [x] Remove preview.
+- [x] Main guard.
+- [x] Dirty guard.
+- [x] Lock guard.
+- [x] Remove.
+- [x] Prune dry-run.
+- [x] Prune.
+- [x] Confirmation.
+- [x] Tests (unit, component, integration, IPC, and browser demo).
+- [x] Browser E2E skipped per request.
 
 ---
 
@@ -3396,12 +3397,12 @@ P2 must not introduce telemetry.
 - [x] detached
 - [x] target validation
 - [x] duplicate branch guard
-- [ ] remove preview
-- [ ] dirty guard
-- [ ] lock guard
-- [ ] main guard
-- [ ] prune preview
-- [ ] prune
+- [x] remove preview
+- [x] dirty guard
+- [x] lock guard
+- [x] main guard
+- [x] prune preview
+- [x] prune
 
 ## Activity
 
