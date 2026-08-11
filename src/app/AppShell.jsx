@@ -754,6 +754,7 @@ export function AppShell({
                       onWorkspaceOperation={(operation, paths) => onWorkspaceOperation?.(loadedSession.id, operation, paths)}
                       onRefresh={onRefresh}
                       onCompare={onCompare}
+                      onOpenWorktree={onOpenRecent}
                       onNavigate={navigateToView}
                       onCherryPick={onCherryPick}
                       onShowBranchInGraph={onShowBranchInGraph}
@@ -875,6 +876,7 @@ function ViewHost({
   graphRequest,
   compareInit,
   onCompare,
+  onOpenWorktree,
   onNavigate,
   onCherryPick,
   onShowBranchInGraph,
@@ -965,6 +967,10 @@ function ViewHost({
           worktrees={data.worktrees}
           repoPath={data.repository.rootPath}
           currentWorktreePath={data.repository.rootPath}
+          currentBranch={data.repository.currentBranch}
+          defaultBranch={data.repository.defaultBranch}
+          onOpenWorktree={onOpenWorktree}
+          onCompare={onCompare}
           onRefresh={onRefresh}
         />
       )}

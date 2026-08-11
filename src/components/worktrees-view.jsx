@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Check,
   CheckCircle2,
+  Copy,
   ExternalLink,
   FolderGit2,
   GitBranch,
+  GitCompareArrows,
   Info,
   LoaderCircle,
   LockKeyhole,
@@ -14,11 +17,15 @@ import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn, truncateMiddle } from "@/lib/utils";
+import { cn, copyText, truncateMiddle } from "@/lib/utils";
 
 function worktreeName(worktree) {
   const value = String(worktree?.path ?? "");
   return value.split(/[\\/]/).filter(Boolean).pop() || value || "Unnamed worktree";
+}
+
+function worktreeRef(worktree) {
+  return worktree?.branch || worktree?.head || "HEAD";
 }
 
 function statusLabel(worktree, detail) {
@@ -34,6 +41,10 @@ export function WorktreesView({
   worktrees = [],
   repoPath,
   currentWorktreePath,
+  currentBranch,
+  defaultBranch,
+  onOpenWorktree,
+  onCompare,
   onRefresh,
 }) {
   const [selectedPath, setSelectedPath] = useState(currentWorktreePath || worktrees.find((worktree) => worktree.main)?.path || worktrees[0]?.path || "");
@@ -41,6 +52,7 @@ export function WorktreesView({
   const [detailErrors, setDetailErrors] = useState({});
   const [loadingPath, setLoadingPath] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [copiedPath, setCopiedPath] = useState("");
 
   const selectedWorktree = useMemo(
     () => worktrees.find((worktree) => worktree.path === selectedPath) ?? null,
@@ -100,6 +112,12 @@ export function WorktreesView({
     }
   };
 
+  const copyPath = async (worktree) => {
+    if (!(await copyText(worktree.path))) return;
+    setCopiedPath(worktree.path);
+    window.setTimeout(() => setCopiedPath((current) => current === worktree.path ? "" : current), 1400);
+  };
+
   const mainWorktrees = worktrees.filter((worktree) => worktree.main || worktree.path === currentWorktreePath);
   const additionalWorktrees = worktrees.filter((worktree) => !mainWorktrees.includes(worktree));
 
@@ -130,7 +148,14 @@ export function WorktreesView({
               error={selectedError}
               loading={loadingPath === selectedWorktree.path}
               currentPath={currentWorktreePath}
+              currentBranch={currentBranch}
+              defaultBranch={defaultBranch}
+              copied={copiedPath === selectedWorktree.path}
+              onCopy={() => copyPath(selectedWorktree)}
+              onOpen={() => onOpenWorktree?.(selectedWorktree.path)}
               onReveal={() => api.revealRepository(selectedWorktree.path)}
+              onCompareWithCurrent={() => onCompare?.(currentBranch, worktreeRef(selectedWorktree))}
+              onCompareWithDefault={() => onCompare?.(defaultBranch, worktreeRef(selectedWorktree))}
             />
           )}
         </div>
@@ -200,10 +225,19 @@ function WorktreeDetails({
   error,
   loading,
   currentPath,
+  currentBranch,
+  defaultBranch,
+  copied,
+  onCopy,
+  onOpen,
   onReveal,
+  onCompareWithCurrent,
+  onCompareWithDefault,
 }) {
   const status = detail?.status;
   const isCurrent = worktree.path === currentPath;
+  const ref = worktreeRef(worktree);
+  const canCompare = Boolean(ref && !worktree.bare && worktree.exists !== false);
   return (
     <Card>
       <CardHeader>
@@ -244,7 +278,11 @@ function WorktreeDetails({
         )}
 
         <div className="flex flex-wrap gap-1.5">
+          <Button size="sm" onClick={onOpen} disabled={isCurrent || worktree.exists === false}><FolderGit2 /> Open in Repo Atlas</Button>
           <Button variant="outline" size="sm" onClick={onReveal}><ExternalLink /> Reveal in file manager</Button>
+          <Button variant="outline" size="sm" onClick={onCopy}>{copied ? <Check /> : <Copy />}{copied ? "Copied" : "Copy path"}</Button>
+          <Button variant="outline" size="sm" onClick={onCompareWithCurrent} disabled={!canCompare || !currentBranch || isCurrent}><GitCompareArrows /> Compare with current</Button>
+          <Button variant="outline" size="sm" onClick={onCompareWithDefault} disabled={!canCompare || !defaultBranch}><GitCompareArrows /> Compare with default</Button>
         </div>
       </CardContent>
     </Card>

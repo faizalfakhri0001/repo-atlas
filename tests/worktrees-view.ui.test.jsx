@@ -62,7 +62,19 @@ describe("WorktreesView", () => {
       },
     }));
     const user = userEvent.setup();
-    render(<WorktreesView worktrees={[main, linked]} repoPath="/workspace/repository" currentWorktreePath={main.path} />);
+    const onOpenWorktree = vi.fn();
+    const onCompare = vi.fn();
+    render(
+      <WorktreesView
+        worktrees={[main, linked]}
+        repoPath="/workspace/repository"
+        currentWorktreePath={main.path}
+        currentBranch="main"
+        defaultBranch="main"
+        onOpenWorktree={onOpenWorktree}
+        onCompare={onCompare}
+      />,
+    );
 
     expect(screen.getByText("Main worktree")).toBeInTheDocument();
     expect(screen.getByText("Additional worktrees")).toBeInTheDocument();
@@ -77,5 +89,11 @@ describe("WorktreesView", () => {
 
     await user.click(screen.getByRole("button", { name: /Reveal in file manager/ }));
     expect(revealRepository).toHaveBeenCalledWith(linked.path);
+    await user.click(screen.getByRole("button", { name: "Open in Repo Atlas" }));
+    expect(onOpenWorktree).toHaveBeenCalledWith(linked.path);
+    await user.click(screen.getByRole("button", { name: "Compare with current" }));
+    await user.click(screen.getByRole("button", { name: "Compare with default" }));
+    expect(onCompare).toHaveBeenNthCalledWith(1, "main", "fix/timezone");
+    expect(onCompare).toHaveBeenNthCalledWith(2, "main", "fix/timezone");
   });
 });
