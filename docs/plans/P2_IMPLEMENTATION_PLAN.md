@@ -2930,16 +2930,16 @@ backup recovery
 
 ## Stage P2-0 — Repository Identity & Metadata
 
-- [ ] Add `git rev-parse --git-common-dir`.
-- [ ] Extend snapshot.
-- [ ] Worktree-aware session identity.
-- [ ] Common repository identity.
-- [ ] Metadata store.
-- [ ] Atomic write.
-- [ ] Backup.
-- [ ] Schema validation.
-- [ ] v1→v2 migration.
-- [ ] Tests.
+- [x] Add `git rev-parse --git-common-dir`.
+- [x] Extend snapshot.
+- [x] Worktree-aware session identity.
+- [x] Common repository identity.
+- [x] Metadata store.
+- [x] Atomic write.
+- [x] Backup.
+- [x] Schema validation.
+- [x] v1→v2 migration.
+- [x] Tests.
 
 Exit:
 
@@ -3355,13 +3355,13 @@ P2 must not introduce telemetry.
 
 ## Foundation
 
-- [ ] commonGitDir identity
-- [ ] worktree session identity
-- [ ] metadata store
-- [ ] atomic persistence
-- [ ] backup
-- [ ] migration
-- [ ] corruption handling
+- [x] commonGitDir identity
+- [x] worktree session identity
+- [x] metadata store
+- [x] atomic persistence
+- [x] backup
+- [x] migration
+- [x] corruption handling
 
 ## Reflog
 
