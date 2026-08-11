@@ -9,12 +9,12 @@ test("navigation commands expose the application views and shortcuts", () => {
     "navigation.overview",
     "navigation.commits",
     "navigation.reflog",
+    "navigation.saved-views",
     "navigation.files",
-    "navigation.workspace",
   ]);
   assert.deepEqual(commands.find((command) => command.id === "navigation.files").shortcut, ["mod", "3"]);
   assert.deepEqual(commands.slice(-3).map((command) => command.id), ["navigation.hotspots", "navigation.ownership", "navigation.health"]);
-  assert.equal(commands.length, 13);
+  assert.equal(commands.length, 14);
 });
 
 test("navigation commands require an active repository and route through context", () => {
