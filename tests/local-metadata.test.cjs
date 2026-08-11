@@ -87,6 +87,8 @@ test("local metadata service persists bookmark and note CRUD without Git writes"
   assert.deepEqual(store.current().bookmarks, []);
   assert.deepEqual(store.current().notes, []);
   assert.deepEqual(checkedCommits, [commitHash, commitHash]);
+  await assert.rejects(service.deleteBookmark("/workspace/repository", { id: "missing" }), (error) => error.code === "BOOKMARK_NOT_FOUND");
+  await assert.rejects(service.deleteNote("/workspace/repository", { id: "missing" }), (error) => error.code === "NOTE_NOT_FOUND");
 });
 
 test("loading orphaned records is allowed, but new or moved targets must resolve", async () => {

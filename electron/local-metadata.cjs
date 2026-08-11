@@ -140,10 +140,10 @@ function normalizeStoredRecords(values, normalizer) {
   }).filter(Boolean);
 }
 
-function findRecord(records, id, label) {
+function findRecord(records, id, label, code) {
   const normalizedId = requireIdValue(id);
   const record = records.find((candidate) => candidate.id === normalizedId);
-  if (!record) throw new GitServiceError(`${label} was not found.`, "LOCAL_METADATA_NOT_FOUND");
+  if (!record) throw new GitServiceError(`${label} was not found.`, code);
   return record;
 }
 
@@ -218,7 +218,7 @@ function createLocalMetadataService({
   async function updateBookmark(repositoryPath, input = {}) {
     const context = await loadContext(repositoryPath);
     const value = requireInputObject(input);
-    const current = findRecord(context.metadata.bookmarks, value.id, "Bookmark");
+    const current = findRecord(context.metadata.bookmarks, value.id, "Bookmark", "BOOKMARK_NOT_FOUND");
     const commitHash = hasOwn(value, "commitHash") ? await assertCommitAvailable(context.repository, value.commitHash) : current.commitHash;
     const timestamp = resolveTimestamp(now);
     const bookmark = normalizeBookmarkRecord({
@@ -235,7 +235,7 @@ function createLocalMetadataService({
 
   async function deleteBookmark(repositoryPath, input = {}) {
     const context = await loadContext(repositoryPath);
-    const current = findRecord(context.metadata.bookmarks, input?.id, "Bookmark");
+    const current = findRecord(context.metadata.bookmarks, input?.id, "Bookmark", "BOOKMARK_NOT_FOUND");
     const metadata = await persist(context, { bookmarks: context.metadata.bookmarks.filter((candidate) => candidate.id !== current.id) });
     return { ...response(context, metadata.bookmarks, "bookmarks"), deletedId: current.id };
   }
@@ -263,7 +263,7 @@ function createLocalMetadataService({
   async function updateNote(repositoryPath, input = {}) {
     const context = await loadContext(repositoryPath);
     const value = requireInputObject(input);
-    const current = findRecord(context.metadata.notes, value.id, "Note");
+    const current = findRecord(context.metadata.notes, value.id, "Note", "NOTE_NOT_FOUND");
     const targetId = hasOwn(value, "targetId") ? await assertCommitAvailable(context.repository, value.targetId) : current.targetId;
     const timestamp = resolveTimestamp(now);
     const note = normalizeNoteRecord({
@@ -281,7 +281,7 @@ function createLocalMetadataService({
 
   async function deleteNote(repositoryPath, input = {}) {
     const context = await loadContext(repositoryPath);
-    const current = findRecord(context.metadata.notes, input?.id, "Note");
+    const current = findRecord(context.metadata.notes, input?.id, "Note", "NOTE_NOT_FOUND");
     const metadata = await persist(context, { notes: context.metadata.notes.filter((candidate) => candidate.id !== current.id) });
     return { ...response(context, metadata.notes, "notes"), deletedId: current.id };
   }

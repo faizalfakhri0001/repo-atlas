@@ -1362,7 +1362,7 @@ export function createDemoApi() {
     },
     updateBookmark: (input = {}) => {
       const current = findDemoBookmark(input.id);
-      if (!current) return localMetadataError("Bookmark was not found.", "LOCAL_METADATA_NOT_FOUND");
+      if (!current) return localMetadataError("Bookmark was not found.", "BOOKMARK_NOT_FOUND");
       try {
         const commitHash = Object.prototype.hasOwnProperty.call(input, "commitHash") ? resolveDemoCommitHash(input.commitHash) : current.commitHash;
         const label = Object.prototype.hasOwnProperty.call(input, "label") ? optionalLocalText(input.label, "Bookmark label", 120) : current.label;
@@ -1402,7 +1402,7 @@ export function createDemoApi() {
     },
     updateNote: (input = {}) => {
       const current = findDemoNote(input.id);
-      if (!current) return localMetadataError("Note was not found.", "LOCAL_METADATA_NOT_FOUND");
+      if (!current) return localMetadataError("Note was not found.", "NOTE_NOT_FOUND");
       try {
         const targetId = Object.prototype.hasOwnProperty.call(input, "targetId") ? resolveDemoCommitHash(input.targetId) : current.targetId;
         const body = Object.prototype.hasOwnProperty.call(input, "body") ? input.body : current.body;

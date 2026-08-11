@@ -101,9 +101,14 @@ export function useLocalMetadata({ repositoryPath } = {}) {
   const deleteNote = useCallback((id) => mutate("deleteNote", { id }), [mutate]);
 
   const bookmarkedHashes = useMemo(() => getBookmarkedHashes(state.bookmarks), [state.bookmarks]);
+  const bookmarkByHash = useMemo(
+    () => new Map(state.bookmarks.map((bookmark) => [bookmark.commitHash, bookmark])),
+    [state.bookmarks],
+  );
   return {
     ...state,
     bookmarkedHashes,
+    bookmarkByHash,
     reload,
     createBookmark,
     updateBookmark,
