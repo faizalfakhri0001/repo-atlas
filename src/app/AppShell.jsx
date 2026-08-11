@@ -16,6 +16,7 @@ import {
   GitCompareArrows,
   HardDrive,
   HeartPulse,
+  History as HistoryIcon,
   LayoutDashboard,
   LoaderCircle,
   Moon,
@@ -36,6 +37,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Overview } from "@/components/overview";
 import { CommitGraph } from "@/features/commits";
+import { ReflogView } from "@/features/reflog";
 import { BranchesView } from "@/features/branches";
 import { CompareView } from "@/features/compare";
 import { WorktreesView, SubmodulesView, RefsView } from "@/features/metadata";
@@ -63,6 +65,7 @@ const NAV_ITEMS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "health", label: "Health", icon: HeartPulse },
   { id: "commits", label: "Commits", icon: GitCommitHorizontal },
+  { id: "reflog", label: "Reflog", icon: HistoryIcon },
   { id: "files", label: "Files", icon: Files },
   { id: "hotspots", label: "Hotspots", icon: Flame },
   { id: "ownership", label: "Ownership", icon: UsersRound },
@@ -391,6 +394,7 @@ export function AppShell({
                   <ViewHost
                     view={loadedSession.activeView}
                     data={loadedSession.snapshot}
+                    revision={loadedSession.snapshot.scannedAt}
                     graphRequest={loadedSession.ui.graphRequest}
                     compareInit={loadedSession.ui.compareInit}
                     fileHistory={loadedSession.ui.fileHistory}
@@ -466,6 +470,7 @@ export function AppShell({
 function ViewHost({
   view,
   data,
+  revision,
   graphRequest,
   compareInit,
   onCompare,
@@ -549,6 +554,17 @@ function ViewHost({
       {view === "hotspots" && <HotspotsView repoPath={data.repository.rootPath} onOpenFileHistory={onOpenFileHistory} initialFilter={navigationRequest?.view === "hotspots" ? navigationRequest.payload?.filter : null} />}
       {view === "ownership" && <OwnershipView repoPath={data.repository.rootPath} />}
       {view === "health" && <HealthView repoPath={data.repository.rootPath} revision={data.scannedAt} onNavigate={onHealthNavigate} />}
+      {view === "reflog" && (
+        <ReflogView
+          repoPath={data.repository.rootPath}
+          currentHead={data.repository.head}
+          currentBranch={data.repository.currentBranch}
+          branches={data.branches}
+          revision={revision}
+          onViewCommit={onFocusCommit}
+          onCompare={onCompare}
+        />
+      )}
       {view === "refs" && <RefsView data={data} />}
     </>
   );

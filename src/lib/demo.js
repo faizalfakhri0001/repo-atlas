@@ -694,6 +694,42 @@ export function createDemoApi() {
     return prefix?.hash ?? null;
   };
 
+  const reflogActions = [
+    ["commit", (commit) => `commit: ${commit.subject}`],
+    ["checkout", () => "checkout: moving from feature/payment to main"],
+    ["commit", (commit) => `commit: ${commit.subject}`],
+    ["reset", () => "reset: moving to HEAD~1"],
+    ["rebase", () => "rebase (pick): replay local commits"],
+    ["merge", (commit) => `merge feature/payment: ${commit.subject}`],
+    ["cherry-pick", (commit) => `cherry-pick: ${commit.shortHash}`],
+  ];
+  const createReflogEntry = (commit, index, refName = "HEAD", selectorPrefix = "HEAD") => {
+    const [action, message] = reflogActions[index % reflogActions.length];
+    return {
+      index,
+      hash: commit.hash,
+      shortHash: commit.shortHash,
+      selector: `${selectorPrefix}@{${index}}`,
+      refName,
+      date: commit.date,
+      actor: { name: commit.author, email: commit.email },
+      rawMessage: message(commit),
+      action,
+      detail: message(commit).replace(/^[a-z-]+(?:\s+\([^)]*\))?:\s*/i, ""),
+      reachable: null,
+    };
+  };
+  const headReflog = commits.slice(0, 80).map((commit, index) => createReflogEntry(commit, index));
+  const reflogByRef = new Map([["HEAD", headReflog]]);
+  for (const branch of localBranches) {
+    const reachable = reachableFrom(byHash, [branch.tip]);
+    const branchEntries = commits
+      .filter((commit) => reachable.has(commit.hash))
+      .slice(0, 80)
+      .map((commit, index) => createReflogEntry(commit, index, `refs/heads/${branch.name}`, branch.name));
+    reflogByRef.set(branch.name, branchEntries);
+  }
+
   const branchRows = () => {
     const rows = [];
     for (const branch of localBranches) {
@@ -1093,6 +1129,36 @@ export function createDemoApi() {
     ownership: (payload = {}) => ok(createDemoOwnershipSummary(commits, mainTip, payload)),
     repositoryHealth: (payload = {}) => ok(createDemoHealthSummary(payload)),
     branchIntelligence: (payload = {}) => ok(createDemoBranchIntelligence(payload)),
+    listReflog: ({ ref = "HEAD", limit = 200, skip = 0 } = {}) => {
+      const normalizedRef = ref === "HEAD" ? "HEAD" : String(ref).replace(/^refs\/heads\//, "");
+      const entriesForRef = reflogByRef.get(normalizedRef) ?? [];
+      const boundedLimit = Math.min(1000, Math.max(1, Math.floor(Number(limit) || 200)));
+      const boundedSkip = Math.max(0, Math.floor(Number(skip) || 0));
+      const entries = entriesForRef.slice(boundedSkip, boundedSkip + boundedLimit);
+      const hasMore = boundedSkip + boundedLimit < entriesForRef.length;
+      return ok({
+        ref: normalizedRef === "HEAD" ? "HEAD" : `refs/heads/${normalizedRef}`,
+        limit: boundedLimit,
+        skip: boundedSkip,
+        hasMore,
+        nextSkip: hasMore ? boundedSkip + boundedLimit : null,
+        entries,
+      });
+    },
+    commitReachability: ({ hash } = {}) => {
+      const resolvedHash = resolveTip(hash);
+      if (!resolvedHash) return Promise.resolve({ ok: false, error: { message: "Unknown demo commit.", code: "UNKNOWN_REF" } });
+      const branchesContaining = localBranches
+        .filter((branch) => reachableFrom(byHash, [branch.tip]).has(resolvedHash))
+        .map((branch) => branch.name);
+      const tagsContaining = tags.filter((tag) => reachableFrom(byHash, [tag.hash]).has(resolvedHash)).map((tag) => tag.name);
+      return ok({
+        hash: resolvedHash,
+        branches: branchesContaining,
+        tags: tagsContaining,
+        reachableFromAnyKnownRef: branchesContaining.length > 0 || tagsContaining.length > 0,
+      });
+    },
     repositorySearch: (payload) => ok(searchDemoRepository(payload)),
     listRepositoryFiles: () => ok(demoFiles),
     readRepositoryFile: ({ path: filePath } = {}) => {

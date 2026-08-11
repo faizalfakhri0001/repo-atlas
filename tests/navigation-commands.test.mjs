@@ -5,15 +5,16 @@ import { isCommandEnabled } from "../src/features/command-palette/command-regist
 
 test("navigation commands expose the application views and shortcuts", () => {
   const commands = createNavigationCommands();
-  assert.deepEqual(commands.slice(0, 4).map((command) => command.id), [
+  assert.deepEqual(commands.slice(0, 5).map((command) => command.id), [
     "navigation.overview",
     "navigation.commits",
+    "navigation.reflog",
     "navigation.files",
     "navigation.workspace",
   ]);
-  assert.deepEqual(commands[2].shortcut, ["mod", "3"]);
+  assert.deepEqual(commands.find((command) => command.id === "navigation.files").shortcut, ["mod", "3"]);
   assert.deepEqual(commands.slice(-3).map((command) => command.id), ["navigation.hotspots", "navigation.ownership", "navigation.health"]);
-  assert.equal(commands.length, 12);
+  assert.equal(commands.length, 13);
 });
 
 test("navigation commands require an active repository and route through context", () => {
