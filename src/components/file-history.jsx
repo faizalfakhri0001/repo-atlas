@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Calendar, FileWarning, History as HistoryIcon, LoaderCircle, Search, UserRound } from "lucide-react";
+import { ArrowLeft, Calendar, FileWarning, History as HistoryIcon, LoaderCircle, Search, Star, UserRound } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn, formatDate, formatRelativeDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,7 @@ function filterHistoryEntries(entries, query, author, dateFilter) {
   });
 }
 
-export function FileHistory({ repoPath, node, state, onStateChange, onClose }) {
+export function FileHistory({ repoPath, node, state, bookmarkedHashes, onStateChange, onClose }) {
   const [loadState, setLoadState] = useState({ loading: false, error: null });
   const [query, setQuery] = useState("");
   const [author, setAuthor] = useState("all");
@@ -44,6 +44,7 @@ export function FileHistory({ repoPath, node, state, onStateChange, onClose }) {
   );
   const filteredEntries = useMemo(() => filterHistoryEntries(entries, query, author, dateFilter), [entries, query, author, dateFilter]);
   const selectedEntry = entries.find((entry) => entry.hash === state?.selectedHash) ?? null;
+  const bookmarkSet = useMemo(() => bookmarkedHashes instanceof Set ? bookmarkedHashes : new Set(bookmarkedHashes ?? []), [bookmarkedHashes]);
 
   useEffect(() => {
     if (!node || state?.selectedPath !== node.path || state?.loaded) return undefined;
@@ -165,6 +166,7 @@ export function FileHistory({ repoPath, node, state, onStateChange, onClose }) {
                       <span className="block truncate text-xs font-medium">{entry.subject || "Untitled commit"}</span>
                       <span className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                         <code className="font-mono">{entry.shortHash}</code>
+                        {bookmarkSet.has(entry.hash) && <Star className="size-3 fill-amber-400 text-amber-400" title="Bookmarked commit" aria-label="Bookmarked commit" />}
                         <span>·</span>
                         <span className="truncate">{entry.author.name}</span>
                       </span>

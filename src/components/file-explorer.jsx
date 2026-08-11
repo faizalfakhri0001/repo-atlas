@@ -50,6 +50,7 @@ export function FileExplorer({
   onOpenCommit,
   onOpenFileAtRevision,
   onOpenPreviousRevision,
+  bookmarkedHashes,
 }) {
   const [state, setState] = useState({ loading: true, error: null, files: [] });
   const [expandedPaths, setExpandedPaths] = useState(() => new Set());
@@ -379,7 +380,7 @@ export function FileExplorer({
           )}
           <div className="min-h-0 flex-1">
             {fileMode === "history" && historyState?.selectedPath === selectedPath && selectedNode ? (
-              <FileHistory repoPath={repoPath} node={selectedNode} state={historyState} onStateChange={onHistoryStateChange} onClose={() => { setFileMode("preview"); onHistoryStateChange?.(null); }} />
+              <FileHistory repoPath={repoPath} node={selectedNode} state={historyState} bookmarkedHashes={bookmarkedHashes} onStateChange={onHistoryStateChange} onClose={() => { setFileMode("preview"); onHistoryStateChange?.(null); }} />
             ) : fileMode === "blame" ? (
               <BlameView
                 repoPath={repoPath}
