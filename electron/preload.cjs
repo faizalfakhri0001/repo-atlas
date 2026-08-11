@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld("repoAtlas", {
   sequencerAction: (payload) => ipcRenderer.invoke("sequencer:action", payload),
   repositorySearch: (payload) => ipcRenderer.invoke("repository:search", payload),
   analyticsSummary: (payload) => ipcRenderer.invoke("analytics:summary", payload),
+  activity: (payload) => ipcRenderer.invoke("analytics:activity", payload),
   hotspots: (payload) => ipcRenderer.invoke("analytics:hotspots", payload),
   ownership: (payload) => ipcRenderer.invoke("analytics:ownership", payload),
   repositoryHealth: (payload) => ipcRenderer.invoke("repository:health", payload),

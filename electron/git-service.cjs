@@ -24,6 +24,7 @@ const { getAnalyticsIndex, invalidateAnalyticsCache, serializeAnalyticsIndex } =
 const { buildHotspotReport } = require("./git/analytics/hotspots.cjs");
 const { buildOwnershipReport } = require("./git/analytics/ownership.cjs");
 const { buildHealthReport, parseTrackedFileRows } = require("./git/analytics/health.cjs");
+const { buildActivityReport } = require("./git/analytics/activity.cjs");
 const { parseBranchRows, resolveDefaultBranch, branchIntelligence } = require("./git/analytics/branches.cjs");
 const { buildWorkspacePatch, parseWorkspacePatch } = require("./git/workspace-operations.cjs");
 const { getCommitReachability, listReflog } = require("./git/reflog.cjs");
@@ -822,6 +823,13 @@ async function ownershipSummary(repositoryPath, options = {}) {
   return buildOwnershipReport(index, options);
 }
 
+async function activitySummary(repositoryPath, options = {}) {
+  const safeOptions = { ...options };
+  if (safeOptions.pathPrefix) safeOptions.pathPrefix = assertRelativePath(safeOptions.pathPrefix).replace(/\/+$/, "");
+  const index = await getAnalyticsIndex(repositoryPath, safeOptions);
+  return buildActivityReport(index, safeOptions);
+}
+
 async function listTrackedFileSizes(repositoryRoot) {
   const headResult = await runGit(repositoryRoot, ["rev-parse", "--verify", "--quiet", "HEAD"], { allowFailure: true });
   if (headResult.failed || !headResult.stdout.trim()) {
@@ -1435,6 +1443,7 @@ module.exports = {
   getCommitDetails,
   getFileDiff,
   analyticsSummary,
+  activitySummary,
   hotspotSummary,
   ownershipSummary,
   repositoryHealth,
