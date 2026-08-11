@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("repoAtlas", {
   revealRepositoryFile: (payload) => ipcRenderer.invoke("repository:reveal-file", payload),
   revealRepository: (repositoryPath) => ipcRenderer.invoke("repository:reveal", repositoryPath),
   listCommits: (payload) => ipcRenderer.invoke("commits:list", payload),
+  listCommitsRange: (payload) => ipcRenderer.invoke("commits:list-range", payload),
   listReflog: (payload) => ipcRenderer.invoke("reflog:list", payload),
   commitReachability: (payload) => ipcRenderer.invoke("commit:reachability", payload),
   commitDetails: (payload) => ipcRenderer.invoke("commit:details", payload),

@@ -9,6 +9,7 @@ const {
   fileBlame,
   resolveRepositoryFilePath,
   listCommits,
+  listCommitsRange,
   getCommitDetails,
   getFileDiff,
   compareRefs,
@@ -144,6 +145,7 @@ function registerIpcHandlers() {
       return null;
     },
     "commits:list": (payload) => listCommits(payload?.repositoryPath, payload ?? {}),
+    "commits:list-range": (payload) => listCommitsRange(payload?.repositoryPath, payload ?? {}),
     "reflog:list": (payload) => listReflog(payload?.repositoryPath, payload ?? {}),
     "commit:reachability": (payload) => getCommitReachability(payload?.repositoryPath, payload?.hash),
     "commit:details": (payload) => getCommitDetails(payload?.repositoryPath, payload?.hash),

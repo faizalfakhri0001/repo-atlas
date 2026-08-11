@@ -31,6 +31,7 @@ const { getCommitReachability, listReflog } = require("./git/reflog.cjs");
 
 const DEFAULT_COMMIT_LIMIT = 1000;
 const MAX_COMMIT_LIMIT = 5000;
+const MAX_COMMIT_RANGE_LIMIT = 500;
 const MAX_CHERRY_PICK_COMMITS = 50;
 const MAX_CONFLICT_PREDICTIONS = 25;
 const MAX_DIFF_BYTES = 1_200_000;
@@ -655,6 +656,33 @@ async function listCommits(repositoryPath, options = {}) {
     limit,
     skip,
   };
+}
+
+function normalizeCommitRangeDate(value, field) {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || value.length > 64 || value.includes("\0") || value.includes("\n") || value.includes("\r")) {
+    throw new GitServiceError(`${field} is invalid.`, "INVALID_ARGUMENT");
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new GitServiceError(`${field} is invalid.`, "INVALID_ARGUMENT");
+  return value;
+}
+
+async function listCommitsRange(repositoryPath, options = {}) {
+  const repository = await resolveRepository(repositoryPath);
+  const from = normalizeCommitRangeDate(options.from, "from");
+  const to = normalizeCommitRangeDate(options.to, "to");
+  if (from && to && new Date(from).getTime() > new Date(to).getTime()) {
+    throw new GitServiceError("The commit range is reversed.", "INVALID_ARGUMENT");
+  }
+  const limit = Math.min(Math.max(Number(options.limit) || 200, 1), MAX_COMMIT_RANGE_LIMIT);
+  const args = ["log", "--all", "--date=iso-strict"];
+  if (from) args.push(`--since=${from}`);
+  if (to) args.push(`--until=${to}`);
+  args.push("-n", String(limit), COMMIT_FORMAT, "--");
+  const result = await runGit(repository.rootPath, args);
+  const commits = parseCommits(result.stdout);
+  return { commits, from, to, limit, truncated: commits.length >= limit };
 }
 
 async function getCommitDetails(repositoryPath, hashInput) {
@@ -1438,6 +1466,7 @@ module.exports = {
   readFileAtRevision,
   fileBlame,
   listCommits,
+  listCommitsRange,
   listReflog,
   getCommitReachability,
   getCommitDetails,

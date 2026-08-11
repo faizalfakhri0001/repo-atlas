@@ -1393,6 +1393,17 @@ export function createDemoApi() {
       return ok({ commits: slice, total: pool.length, limit, skip });
     },
 
+    listCommitsRange: ({ from, to, limit = 200 } = {}) => {
+      const fromTimestamp = from ? Date.parse(from) : -Infinity;
+      const toTimestamp = to ? Date.parse(to) : Infinity;
+      if (!Number.isFinite(fromTimestamp) && from) return Promise.resolve({ ok: false, error: { message: "The commit range start is invalid.", code: "INVALID_ARGUMENT" } });
+      if (!Number.isFinite(toTimestamp) && to) return Promise.resolve({ ok: false, error: { message: "The commit range end is invalid.", code: "INVALID_ARGUMENT" } });
+      if (fromTimestamp > toTimestamp) return Promise.resolve({ ok: false, error: { message: "The commit range is reversed.", code: "INVALID_ARGUMENT" } });
+      const boundedLimit = Math.min(500, Math.max(1, Math.floor(Number(limit) || 200)));
+      const selected = commits.filter((commit) => commit.timestamp >= fromTimestamp && commit.timestamp <= toTimestamp).slice(0, boundedLimit);
+      return ok({ commits: selected.map(({ timestamp, ...commit }) => commit), from: from ?? null, to: to ?? null, limit: boundedLimit, truncated: selected.length >= boundedLimit });
+    },
+
     commitDetails: ({ hash } = {}) => {
       const commit = byHash.get(resolveTip(hash));
       if (!commit) return Promise.resolve({ ok: false, error: { message: "Unknown commit.", code: "UNKNOWN_REF" } });
