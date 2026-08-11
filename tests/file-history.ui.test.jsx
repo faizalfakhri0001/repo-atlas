@@ -52,6 +52,7 @@ function HistoryHarness() {
       repoPath="/workspace/repository"
       node={{ path: "src/domain/account.js", name: "account.js", type: "file" }}
       state={state}
+      bookmarkedHashes={new Set([entries[0].hash])}
       onStateChange={setState}
       onClose={vi.fn()}
     />
@@ -69,6 +70,7 @@ describe("FileHistory", () => {
     render(<HistoryHarness />);
 
     expect(await screen.findByText("Update account")).toBeInTheDocument();
+    expect(screen.getByTitle("Bookmarked commit")).toBeInTheDocument();
     expect(fileHistory).toHaveBeenCalledWith({ repositoryPath: "/workspace/repository", path: "src/domain/account.js", limit: 200, skip: 0 });
 
     const authorFilter = screen.getByRole("combobox", { name: "Filter history by author" });
