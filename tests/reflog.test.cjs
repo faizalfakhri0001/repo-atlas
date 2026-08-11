@@ -8,6 +8,7 @@ const { promisify } = require("node:util");
 const {
   DEFAULT_REFLOG_LIMIT,
   MAX_REFLOG_LIMIT,
+  getCommitReachability,
   listReflog,
   normalizeReflogPagination,
   normalizeReflogRef,
@@ -147,5 +148,32 @@ test("listReflog rejects unknown local branches and non-local refs", async (t) =
   await assert.rejects(
     listReflog(root, { ref: "refs/tags/v1" }),
     (error) => error instanceof GitServiceError && error.code === "INVALID_ARGUMENT",
+  );
+});
+
+test("getCommitReachability resolves branches and tags only when requested", async (t) => {
+  const root = await createRepository(t);
+  const initialHash = (await execFileAsync("git", ["rev-list", "--max-parents=0", "HEAD"], { cwd: root, encoding: "utf8" })).stdout.trim();
+  const beforeTag = await getCommitReachability(root, initialHash);
+  await execFileAsync("git", ["tag", "v1.0.0", initialHash], { cwd: root, encoding: "utf8" });
+  const afterTag = await getCommitReachability(root, initialHash);
+
+  assert.equal(beforeTag.hash, initialHash);
+  assert.ok(beforeTag.branches.includes("main"));
+  assert.ok(beforeTag.branches.includes("feature/payment"));
+  assert.deepEqual(beforeTag.tags, []);
+  assert.deepEqual(afterTag.tags, ["v1.0.0"]);
+  assert.equal(afterTag.reachableFromAnyKnownRef, true);
+});
+
+test("getCommitReachability validates commit input before invoking Git", async (t) => {
+  const root = await createRepository(t);
+  await assert.rejects(
+    getCommitReachability(root, "not-a-commit"),
+    (error) => error instanceof GitServiceError && error.code === "INVALID_ARGUMENT",
+  );
+  await assert.rejects(
+    getCommitReachability(root, "f".repeat(40)),
+    (error) => error instanceof GitServiceError && error.code === "UNKNOWN_REF",
   );
 });

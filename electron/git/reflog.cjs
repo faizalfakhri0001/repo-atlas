@@ -1,7 +1,9 @@
 const {
   GitServiceError,
+  assertCommitHash,
   assertRefName,
   resolveRepository,
+  resolveCommit,
   runGit,
 } = require("./core.cjs");
 
@@ -151,6 +153,29 @@ async function listReflog(repositoryPath, options = {}) {
   };
 }
 
+async function getCommitReachability(repositoryPath, hashInput) {
+  const hash = assertCommitHash(hashInput);
+  const repository = await resolveRepository(repositoryPath);
+  const commit = await resolveCommit(repository.rootPath, hash);
+  const [branchesResult, tagsResult] = await Promise.all([
+    runGit(repository.rootPath, ["branch", "--contains", commit.hash, "--format=%(refname:short)"], { allowFailure: true }),
+    runGit(repository.rootPath, ["tag", "--contains", commit.hash, "--format=%(refname:short)"], { allowFailure: true }),
+  ]);
+  if (branchesResult.failed || tagsResult.failed) {
+    throw new GitServiceError("Git could not calculate commit reachability.", "REFLOG_FAILED", branchesResult.stderr || tagsResult.stderr);
+  }
+
+  const parseNames = (raw) => raw.split("\n").map((name) => name.trim().replace(/^\*\s*/, "")).filter(Boolean);
+  const branches = parseNames(branchesResult.stdout);
+  const tags = parseNames(tagsResult.stdout);
+  return {
+    hash: commit.hash,
+    branches,
+    tags,
+    reachableFromAnyKnownRef: branches.length > 0 || tags.length > 0,
+  };
+}
+
 module.exports = {
   DEFAULT_REFLOG_LIMIT,
   MAX_REFLOG_LIMIT,
@@ -160,6 +185,7 @@ module.exports = {
   REFLOG_FIELD_SEPARATOR,
   REFLOG_RECORD_SEPARATOR,
   assertReflogRefAvailable,
+  getCommitReachability,
   listReflog,
   normalizeReflogPagination,
   normalizeReflogRef,
