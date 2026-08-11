@@ -2,6 +2,7 @@ const path = require("node:path");
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const {
   scanRepository,
+  getWorktreeDetails,
   listRepositoryFiles,
   readRepositoryFile,
   listFileHistory,
@@ -136,6 +137,7 @@ function registerIpcHandlers() {
 
   const invokeHandlers = {
     "repository:scan": (payload) => scanRepository(payload?.repositoryPath ?? payload),
+    "worktree:details": (payload) => getWorktreeDetails(payload?.repositoryPath, payload?.path),
     "repository:list-files": (payload) => listRepositoryFiles(payload?.repositoryPath ?? payload),
     "repository:file-content": (payload) => readRepositoryFile(payload?.repositoryPath, payload?.path),
     "file:history": (payload) => listFileHistory(payload?.repositoryPath, payload ?? {}),

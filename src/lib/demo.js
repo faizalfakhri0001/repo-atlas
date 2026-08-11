@@ -999,6 +999,43 @@ export function createDemoApi() {
     ],
   };
 
+  const demoWorktrees = [
+    {
+      path: "/demo/acme-storefront",
+      head: mainTip,
+      shortHead: mainTip.slice(0, 8),
+      branch: "main",
+      bare: false,
+      detached: false,
+      locked: false,
+      lockReason: "",
+      prunable: false,
+      pruneReason: "",
+      reason: "",
+      main: true,
+      exists: true,
+      dirty: true,
+      changes: status.files.length,
+    },
+    {
+      path: "/demo/acme-storefront-hotfix",
+      head: resolveTip("fix/timezone"),
+      shortHead: resolveTip("fix/timezone").slice(0, 8),
+      branch: "fix/timezone",
+      bare: false,
+      detached: false,
+      locked: true,
+      lockReason: "hotfix in progress",
+      prunable: false,
+      pruneReason: "",
+      reason: "hotfix in progress",
+      main: false,
+      exists: true,
+      dirty: false,
+      changes: 0,
+    },
+  ];
+
   const scanData = () => ({
     scannedAt: new Date().toISOString(),
     repository: {
@@ -1022,10 +1059,7 @@ export function createDemoApi() {
     status,
     branches: branchRows(),
     commits: commits.map(({ timestamp, ...commit }) => commit),
-    worktrees: [
-      { path: "/demo/acme-storefront", head: mainTip, branch: "main", bare: false, detached: false, locked: false, prunable: false, reason: "" },
-      { path: "/demo/acme-storefront-hotfix", head: resolveTip("fix/timezone"), branch: "fix/timezone", bare: false, detached: false, locked: true, prunable: false, reason: "hotfix in progress" },
-    ],
+    worktrees: cloneDemoValue(demoWorktrees),
     submodules: [
       { name: "design-tokens", path: "vendor/design-tokens", url: "https://example.com/acme/design-tokens.git", hash: commits[10].hash, shortHash: commits[10].shortHash, description: "heads/main", state: "clean" },
     ],
@@ -1285,6 +1319,19 @@ export function createDemoApi() {
     stageHunk: demoWriteError,
     unstageHunk: demoWriteError,
     scanRepository: () => ok(scanData()),
+    worktreeDetails: ({ path: requestedPath } = {}) => {
+      const worktree = demoWorktrees.find((candidate) => candidate.path === requestedPath);
+      if (!worktree) return Promise.resolve({ ok: false, error: { message: "The selected path is not a registered Git worktree.", code: "WORKTREE_NOT_FOUND" } });
+      const worktreeStatus = worktree.main
+        ? status
+        : { branch: worktree.branch, oid: worktree.head, upstream: "", ahead: 0, behind: 0, files: [] };
+      return ok({
+        worktree: cloneDemoValue(worktree),
+        status: cloneDemoValue(worktreeStatus),
+        dirty: worktreeStatus.files.length > 0,
+        changes: worktreeStatus.files.length,
+      });
+    },
     analyticsSummary: (payload = {}) => ok(createDemoAnalyticsSummary(commits, mainTip, payload)),
     activity: (payload = {}) => ok(createDemoActivitySummary(commits, mainTip, payload)),
     hotspots: (payload = {}) => ok(createDemoHotspotSummary(commits, mainTip, payload)),

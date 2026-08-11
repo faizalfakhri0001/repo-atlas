@@ -1341,6 +1341,44 @@ async function scanRepository(candidatePath) {
   };
 }
 
+async function getWorktreeDetails(repositoryPath, worktreePath) {
+  const repository = await resolveRepository(repositoryPath);
+  if (typeof worktreePath !== "string" || worktreePath.trim().length === 0 || worktreePath.includes("\0")) {
+    throw new GitServiceError("A worktree path is required.", "INVALID_PATH");
+  }
+
+  const listedResult = await runGit(repository.rootPath, ["worktree", "list", "--porcelain"]);
+  const mainPath = path.basename(repository.commonGitDir) === ".git" ? path.dirname(repository.commonGitDir) : "";
+  const worktrees = await decorateWorktrees(parseWorktrees(listedResult.stdout), mainPath);
+  const requestedPath = await fs.realpath(path.resolve(worktreePath)).catch(() => path.resolve(worktreePath));
+  const worktree = worktrees.find((candidate) => path.resolve(candidate.path) === requestedPath);
+  if (!worktree) {
+    throw new GitServiceError("The selected path is not a registered Git worktree.", "WORKTREE_NOT_FOUND");
+  }
+  if (!worktree.exists) {
+    throw new GitServiceError("The selected worktree is no longer available on disk.", "WORKTREE_UNAVAILABLE");
+  }
+  if (worktree.bare) {
+    return { worktree, status: null, dirty: false, changes: 0 };
+  }
+
+  const statusResult = await runGit(worktree.path, ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]);
+  const status = parseStatus(statusResult.stdout);
+  const currentWorktree = {
+    ...worktree,
+    head: status.oid || worktree.head,
+    shortHead: (status.oid || worktree.head).slice(0, 8),
+    branch: worktree.branch || (status.branch === "Detached HEAD" ? "" : status.branch),
+    detached: worktree.detached || status.branch === "Detached HEAD",
+  };
+  return {
+    worktree: currentWorktree,
+    status,
+    dirty: status.files.length > 0,
+    changes: status.files.length,
+  };
+}
+
 function buildPartialRepository(repository, status, defaultBranchInfo = {}) {
   return {
     ...repository,
@@ -1502,6 +1540,7 @@ module.exports = {
   parseRepositoryFileList,
   getRepositoryState,
   scanRepository,
+  getWorktreeDetails,
   listRepositoryFiles,
   readRepositoryFile,
   listFileHistory,

@@ -960,7 +960,14 @@ function ViewHost({
           initialConfig={navigationRequest?.view === "branches" ? navigationRequest.payload : null}
         />
       )}
-      {view === "worktrees" && <WorktreesView worktrees={data.worktrees} />}
+      {view === "worktrees" && (
+        <WorktreesView
+          worktrees={data.worktrees}
+          repoPath={data.repository.rootPath}
+          currentWorktreePath={data.repository.rootPath}
+          onRefresh={onRefresh}
+        />
+      )}
       {view === "submodules" && <SubmodulesView submodules={data.submodules} />}
       {view === "workspace" && (
         <WorkspaceView

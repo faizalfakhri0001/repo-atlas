@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("repoAtlas", {
   openRepository: () => ipcRenderer.invoke("dialog:open-repository"),
   scanRepository: (repositoryPath) => ipcRenderer.invoke("repository:scan", { repositoryPath }),
+  worktreeDetails: (payload) => ipcRenderer.invoke("worktree:details", payload),
   listRepositoryFiles: (payload) => ipcRenderer.invoke("repository:list-files", payload),
   readRepositoryFile: (payload) => ipcRenderer.invoke("repository:file-content", payload),
   fileHistory: (payload) => ipcRenderer.invoke("file:history", payload),

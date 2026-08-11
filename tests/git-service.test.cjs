@@ -17,6 +17,7 @@ const {
   parseMergeTreeConflicts,
   parseUpstreamTrack,
   scanRepository,
+  getWorktreeDetails,
   listRepositoryFiles,
   parseRepositoryFileList,
   readRepositoryFile,
@@ -186,6 +187,17 @@ test("scanRepository resolves a linked worktree as its own repository context", 
   assert.equal(mainWorktree.exists, true);
   assert.equal(mainWorktree.main, true);
   assert.equal(mainWorktree.shortHead, mainWorktree.head.slice(0, 8));
+
+  await fs.writeFile(path.join(linked, "dirty.txt"), "dirty\n");
+  const details = await getWorktreeDetails(root, linked);
+  assert.equal(details.worktree.path, resolvedLinked);
+  assert.equal(details.dirty, true);
+  assert.equal(details.changes, 1);
+  assert.equal(details.status.files[0].path, "dirty.txt");
+  await assert.rejects(
+    () => getWorktreeDetails(root, path.join(root, "not-a-worktree")),
+    (error) => error?.code === "WORKTREE_NOT_FOUND",
+  );
 });
 
 test("scanRepository reports an initialized submodule without traversing into it", async (t) => {

@@ -12,6 +12,11 @@ test("demo mode exposes a complete read-only repository workflow", async () => {
   assert.equal(scan.ok, true);
   assert.equal(scan.data.repository.rootPath, repositoryPath);
   assert.ok(scan.data.commits.length > 0);
+  assert.equal(scan.data.worktrees[0].main, true);
+  const worktreeDetails = await api.worktreeDetails({ repositoryPath, path: scan.data.worktrees[0].path });
+  assert.equal(worktreeDetails.ok, true);
+  assert.equal(worktreeDetails.data.dirty, true);
+  assert.equal(worktreeDetails.data.changes, scan.data.status.files.length);
 
   const files = await api.listRepositoryFiles({ repositoryPath });
   assert.equal(files.ok, true);
