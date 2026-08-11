@@ -31,10 +31,14 @@ const {
   GitServiceError,
 } = require("./git-service.cjs");
 const { createPreferencesStore } = require("./preferences.cjs");
+const { createRepositoryMetadataStore } = require("./repository-metadata.cjs");
+const { createSavedViewService } = require("./saved-views.cjs");
 const { WatchManager } = require("./watch/watch-manager.cjs");
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
 const preferences = createPreferencesStore({ filePath: () => path.join(app.getPath("userData"), "preferences.json") });
+const repositoryMetadata = createRepositoryMetadataStore({ userDataPath: () => app.getPath("userData") });
+const savedViews = createSavedViewService({ store: repositoryMetadata });
 const watchManager = new WatchManager({
   onChange: (event) => {
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send("repository:changed", event);
@@ -153,6 +157,10 @@ function registerIpcHandlers() {
     "analytics:ownership": (payload) => ownershipSummary(payload?.repositoryPath, payload ?? {}),
     "repository:health": (payload) => repositoryHealth(payload?.repositoryPath, payload ?? {}),
     "branches:intelligence": (payload) => branchIntelligence(payload?.repositoryPath, payload ?? {}),
+    "saved-view:list": (payload) => savedViews.listSavedViews(payload?.repositoryPath),
+    "saved-view:create": (payload) => savedViews.createSavedView(payload?.repositoryPath, payload ?? {}),
+    "saved-view:update": (payload) => savedViews.updateSavedView(payload?.repositoryPath, payload ?? {}),
+    "saved-view:delete": (payload) => savedViews.deleteSavedView(payload?.repositoryPath, payload ?? {}),
     "settings:get-operation-mode": async () => ({ operationMode: await preferences.getOperationMode() }),
     "settings:set-operation-mode": async (payload) => ({ operationMode: await preferences.setOperationMode(payload?.mode) }),
     "workspace:stage-files": (payload) => executeWorkspaceOperation(payload, ({ operationMode }) => stageFiles(payload?.repositoryPath, payload?.paths, { operationMode })),
