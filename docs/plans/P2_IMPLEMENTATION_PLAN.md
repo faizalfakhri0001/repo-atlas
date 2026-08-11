@@ -3087,23 +3087,25 @@ The bookmark indicator is conditional on bookmark metadata supplied to the view;
 
 ## Stage P2-10 — Hardening
 
-- [ ] huge reflog;
-- [ ] 2-year heatmap;
-- [ ] multi-author timezone;
-- [ ] corrupted metadata;
-- [ ] migration;
-- [ ] orphan bookmarks;
-- [ ] missing saved-view refs;
-- [ ] multiple linked worktrees;
-- [ ] dirty worktree;
-- [ ] locked worktree;
-- [ ] prunable worktree;
-- [ ] spaces/unicode paths;
-- [ ] Windows paths;
-- [ ] multi-repository;
-- [ ] regression P0/P1;
-- [ ] regression cherry-pick;
-- [ ] regression stage/unstage.
+- [x] huge reflog;
+- [x] 2-year heatmap;
+- [x] multi-author timezone;
+- [x] corrupted metadata;
+- [x] migration;
+- [x] orphan bookmarks;
+- [x] missing saved-view refs;
+- [x] multiple linked worktrees;
+- [x] dirty worktree;
+- [x] locked worktree;
+- [x] prunable worktree;
+- [x] spaces/unicode paths;
+- [x] Windows paths;
+- [x] multi-repository;
+- [x] regression P0/P1;
+- [x] regression cherry-pick;
+- [x] regression stage/unstage.
+
+Hardening coverage is implemented in `tests/history-hardening.integration.test.cjs`, `tests/metadata-hardening.test.cjs`, `tests/worktree-hardening.integration.test.cjs`, and `tests/regression-hardening.integration.test.cjs`. Browser E2E coverage remains skipped per request.
 
 ---
 
@@ -3458,9 +3460,9 @@ P2 must not introduce telemetry.
 - [ ] Linux
 - [x] demo
 - [x] multi-worktree
-- [ ] multi-repository
-- [ ] P0 regression
-- [ ] P1 regression
+- [x] multi-repository
+- [x] P0 regression
+- [x] P1 regression
 
 ---
 
