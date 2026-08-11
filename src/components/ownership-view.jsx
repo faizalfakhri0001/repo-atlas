@@ -57,12 +57,18 @@ function OwnershipDetail({ node }) {
   );
 }
 
-export function OwnershipView({ repoPath }) {
-  const [period, setPeriod] = useState("all");
-  const [currentPath, setCurrentPath] = useState("");
+export function OwnershipView({ repoPath, initialConfig = null }) {
+  const [period, setPeriod] = useState(() => initialConfig?.period ?? "all");
+  const [currentPath, setCurrentPath] = useState(() => initialConfig?.path ?? "");
   const [selectedNode, setSelectedNode] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [state, setState] = useState({ loading: true, error: null, data: null });
+
+  useEffect(() => {
+    if (!initialConfig) return;
+    setPeriod(initialConfig.period ?? "all");
+    setCurrentPath(initialConfig.path ?? "");
+  }, [initialConfig]);
 
   useEffect(() => {
     let cancelled = false;

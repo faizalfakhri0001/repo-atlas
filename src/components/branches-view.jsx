@@ -190,10 +190,13 @@ export function BranchesView({
   onCompareWithCurrent,
   onCompareWithDefault,
   initialFilter = null,
+  initialConfig = null,
 }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("name");
+  const [sortDirection, setSortDirection] = useState("desc");
+  const [localOnly, setLocalOnly] = useState(false);
   const [viewMode, setViewMode] = useState("list");
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(Boolean(repoPath));
@@ -202,6 +205,17 @@ export function BranchesView({
   useEffect(() => {
     if (STATUS_FILTERS.some(([value]) => value === initialFilter)) setStatusFilter(initialFilter);
   }, [initialFilter]);
+
+  useEffect(() => {
+    if (!initialConfig) return;
+    const configuredStatus = initialConfig.status?.[0];
+    if (STATUS_FILTERS.some(([value]) => value === configuredStatus)) setStatusFilter(configuredStatus);
+    if (["name", "date", "activity", "ahead", "behind", "status"].includes(initialConfig.sort)) {
+      setSortBy(initialConfig.sort === "date" ? "activity" : initialConfig.sort);
+    }
+    if (initialConfig.direction === "asc" || initialConfig.direction === "desc") setSortDirection(initialConfig.direction);
+    if (typeof initialConfig.localOnly === "boolean") setLocalOnly(initialConfig.localOnly);
+  }, [initialConfig]);
 
   useEffect(() => {
     let active = true;
@@ -244,7 +258,7 @@ export function BranchesView({
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    let list = normalizedBranches;
+    let list = localOnly ? normalizedBranches.filter((branch) => !branch.remote) : normalizedBranches;
     if (statusFilter === "remote") list = list.filter((branch) => branch.remote);
     else if (statusFilter !== "all") list = list.filter((branch) => !branch.remote && branch.status === statusFilter);
     if (normalized) {
@@ -252,7 +266,7 @@ export function BranchesView({
         [branch.name, branch.upstream, branch.author, branch.subject, branch.hash, branch.status].join(" ").toLowerCase().includes(normalized),
       );
     }
-    return [...list].sort((left, right) => {
+    const sorted = [...list].sort((left, right) => {
       if (sortBy === "activity") {
         return new Date(right.lastCommitAt || 0).getTime() - new Date(left.lastCommitAt || 0).getTime() || left.name.localeCompare(right.name);
       }
@@ -267,7 +281,8 @@ export function BranchesView({
       }
       return Number(right.current) - Number(left.current) || left.name.localeCompare(right.name);
     });
-  }, [normalizedBranches, query, sortBy, statusFilter]);
+    return sortDirection === "asc" ? sorted.reverse() : sorted;
+  }, [localOnly, normalizedBranches, query, sortBy, sortDirection, statusFilter]);
 
   const remoteCount = normalizedBranches.filter((branch) => branch.remote).length;
   const filterCount = (filter) => {

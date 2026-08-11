@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   Archive,
+  Bookmark,
   Boxes,
   Cherry,
   CircleAlert,
@@ -54,11 +55,22 @@ import {
   createCommandRegistry,
   createFileCommands,
   createNavigationCommands,
+  createSavedViewCommands,
   createRepositoryCommands,
   createSearchCommands,
   useCommandPalette,
   useCommandPaletteShortcuts,
 } from "@/features/command-palette";
+import { SaveViewDialog, SavedViewNotice, SavedViewToolbar, SavedViewsView } from "@/components/saved-views-view";
+import {
+  configsEqual,
+  getCurrentSavedViewSnapshot,
+  getMissingSavedViewReferences,
+  getSavedViewNavigation,
+  getSavedViewTypeLabel,
+  savedViewMatchesCurrent,
+  useSavedViews,
+} from "@/features/saved-views";
 import { cn, formatRelativeDate, truncateMiddle } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -136,9 +148,34 @@ export function AppShell({
   const workspaceSessions = useMemo(() => (sessions.length > 0 ? sessions : session ? [session] : []), [session, sessions]);
   const loadedSessions = workspaceSessions.filter((candidate) => candidate.snapshot);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [globalSearchInitialQuery, setGlobalSearchInitialQuery] = useState("");
+  const [openedSavedViewId, setOpenedSavedViewId] = useState(null);
+  const [savedViewDialog, setSavedViewDialog] = useState(null);
+  const [savedViewActionError, setSavedViewActionError] = useState(null);
+  const savedViewsState = useSavedViews({ repositoryPath: data?.repository.rootPath });
+  const currentSavedView = useMemo(
+    () => getCurrentSavedViewSnapshot({
+      activeView,
+      graphRequest: session?.ui?.graphRequest,
+      compareInit: session?.ui?.compareInit,
+      navigationRequest: session?.ui?.navigationRequest,
+    }),
+    [activeView, session?.ui?.compareInit, session?.ui?.graphRequest, session?.ui?.navigationRequest],
+  );
+  const activeSavedView = useMemo(() => {
+    if (!currentSavedView) return null;
+    const opened = openedSavedViewId
+      ? savedViewsState.savedViews.find((view) => view.id === openedSavedViewId && view.viewType === currentSavedView.viewType)
+      : null;
+    return opened ?? savedViewsState.savedViews.find((view) => savedViewMatchesCurrent(view, currentSavedView)) ?? null;
+  }, [currentSavedView, openedSavedViewId, savedViewsState.savedViews]);
+  const savedViewModified = Boolean(activeSavedView && currentSavedView && !configsEqual(activeSavedView.config, currentSavedView.config));
 
   const openGlobalSearch = useCallback(() => {
-    if (data) setGlobalSearchOpen(true);
+    if (data) {
+      setGlobalSearchInitialQuery("");
+      setGlobalSearchOpen(true);
+    }
   }, [data]);
 
   const openSearchResult = useCallback(
@@ -152,6 +189,155 @@ export function AppShell({
     [onFocusAuthor, onFocusCommit, onOpenFile, onShowBranchInGraph],
   );
 
+  const navigateToView = useCallback(
+    (view) => {
+      setOpenedSavedViewId(null);
+      setSavedViewActionError(null);
+      onNavigate(view);
+    },
+    [onNavigate],
+  );
+
+  const requestNavigationToView = useCallback(
+    (view, payload = {}) => {
+      setSavedViewActionError(null);
+      setOpenedSavedViewId(null);
+      if (onRequestNavigation) onRequestNavigation(view, payload, selectedSessionId);
+      else onNavigate(view);
+    },
+    [onNavigate, onRequestNavigation, selectedSessionId],
+  );
+
+  const manageSavedViews = useCallback(() => navigateToView("saved-views"), [navigateToView]);
+
+  const openSavedView = useCallback(
+    async (view) => {
+      if (!view || !data) return;
+      const missing = getMissingSavedViewReferences(view, data);
+      if (missing.length > 0 && view.viewType === "compare") {
+        setSavedViewActionError(`Cannot open ${view.name}: unavailable reference${missing.length === 1 ? "" : "s"} ${missing.join(", ")}.`);
+        return;
+      }
+      const config = { ...(view.config ?? {}) };
+      if (missing.length > 0) {
+        const confirmed = typeof window === "undefined" || typeof window.confirm !== "function"
+          ? false
+          : window.confirm(`This saved view references ${missing.join(", ")}, which is not available anymore. Open without those filters?`);
+        if (!confirmed) return;
+        if (view.viewType === "commits" && Array.isArray(config.refs)) {
+          config.refs = config.refs.filter((reference) => !missing.includes(reference));
+          if (config.refs.length === 0) delete config.refs;
+        }
+        if (view.viewType === "reflog" && missing.includes(config.ref)) config.ref = "HEAD";
+      }
+      const nextView = { ...view, config };
+      const navigation = getSavedViewNavigation(nextView);
+      if (!navigation) return;
+      setSavedViewActionError(null);
+      setOpenedSavedViewId(view.id);
+      void savedViewsState.touchSavedView(view).catch(() => {});
+      if (view.viewType === "search") {
+        setGlobalSearchInitialQuery(config.query ?? "");
+        setGlobalSearchOpen(true);
+      } else if (view.viewType === "compare" && config.base && config.head && onCompare) {
+        onCompare(config.base, config.head);
+      } else {
+        requestNavigationToView(navigation.view, navigation.payload);
+        setOpenedSavedViewId(view.id);
+      }
+    },
+    [data, onCompare, requestNavigationToView, savedViewsState, selectedSessionId],
+  );
+
+  const openSaveDialog = useCallback((mode, target = null) => {
+    if (!currentSavedView && mode !== "rename") {
+      setSavedViewActionError("Open a filterable repository view before saving it.");
+      return;
+    }
+    setSavedViewActionError(null);
+    setSavedViewDialog({ mode, target });
+  }, [currentSavedView]);
+
+  const [savedViewBusy, setSavedViewBusy] = useState(false);
+  const saveCurrentView = useCallback(async () => {
+    if (!currentSavedView) return;
+    if (activeSavedView && savedViewModified) {
+      setSavedViewBusy(true);
+      setSavedViewActionError(null);
+      try {
+        await savedViewsState.updateSavedView({
+          id: activeSavedView.id,
+          viewType: currentSavedView.viewType,
+          configVersion: currentSavedView.configVersion,
+          config: currentSavedView.config,
+        });
+      } catch (actionError) {
+        setSavedViewActionError(actionError?.message ?? "Saved view could not be updated.");
+      } finally {
+        setSavedViewBusy(false);
+      }
+      return;
+    }
+    openSaveDialog(activeSavedView ? "saveAs" : "create", activeSavedView);
+  }, [activeSavedView, currentSavedView, openSaveDialog, savedViewModified, savedViewsState]);
+
+  const handleSavedViewDialogSubmit = useCallback(async ({ name, pinned }) => {
+    if (!savedViewDialog) return;
+    setSavedViewBusy(true);
+    setSavedViewActionError(null);
+    try {
+      if (savedViewDialog.mode === "rename") {
+        await savedViewsState.updateSavedView({ id: savedViewDialog.target.id, name });
+        setSavedViewDialog(null);
+      } else if (currentSavedView) {
+        const result = await savedViewsState.createSavedView({
+          name,
+          viewType: currentSavedView.viewType,
+          configVersion: currentSavedView.configVersion,
+          config: currentSavedView.config,
+          pinned,
+        });
+        setOpenedSavedViewId(result.savedView?.id ?? null);
+        setSavedViewDialog(null);
+      }
+    } catch (actionError) {
+      setSavedViewActionError(actionError?.message ?? "Saved view could not be saved.");
+    } finally {
+      setSavedViewBusy(false);
+    }
+  }, [currentSavedView, savedViewDialog, savedViewsState]);
+
+  const saveAsNew = useCallback(() => openSaveDialog("saveAs", activeSavedView), [activeSavedView, openSaveDialog]);
+  const revertSavedView = useCallback(() => {
+    if (activeSavedView) void openSavedView(activeSavedView);
+  }, [activeSavedView, openSavedView]);
+
+  const renameSavedView = useCallback((view) => openSaveDialog("rename", view), [openSaveDialog]);
+  const toggleSavedViewPin = useCallback(async (view) => {
+    try {
+      await savedViewsState.updateSavedView({ id: view.id, pinned: !view.pinned });
+    } catch (actionError) {
+      setSavedViewActionError(actionError?.message ?? "Saved view pin could not be changed.");
+    }
+  }, [savedViewsState]);
+  const duplicateSavedView = useCallback(async (view) => {
+    try {
+      const result = await savedViewsState.duplicateSavedView(view);
+      if (result.savedView?.id) setOpenedSavedViewId(result.savedView.id);
+    } catch (actionError) {
+      setSavedViewActionError(actionError?.message ?? "Saved view could not be duplicated.");
+    }
+  }, [savedViewsState]);
+  const deleteSavedView = useCallback(async (view) => {
+    if (typeof window !== "undefined" && typeof window.confirm === "function" && !window.confirm(`Delete saved view “${view.name}”?`)) return;
+    try {
+      await savedViewsState.deleteSavedView(view.id);
+      if (openedSavedViewId === view.id) setOpenedSavedViewId(null);
+    } catch (actionError) {
+      setSavedViewActionError(actionError?.message ?? "Saved view could not be deleted.");
+    }
+  }, [openedSavedViewId, savedViewsState]);
+
   const commandContext = useMemo(
     () => ({
       activeRepository: data?.repository ?? null,
@@ -160,7 +346,7 @@ export function AppShell({
       sessions: workspaceSessions,
       recentRepositories,
       isDemo,
-      navigate: onNavigate,
+      navigate: navigateToView,
       openRepository: onOpen,
       refreshRepository: onRefresh,
       revealRepository: (repositoryPath) => api.revealRepository(repositoryPath),
@@ -169,12 +355,17 @@ export function AppShell({
       openRecentRepository: onOpenRecent,
       quickOpenFile: onQuickOpenFile,
       openGlobalSearch,
+      currentSavedView,
+      saveCurrentView,
+      manageSavedViews,
+      openSavedView,
     }),
-    [activeView, data?.repository, isDemo, onActivateRepository, onCloseRepository, onNavigate, onOpen, onOpenRecent, onQuickOpenFile, onRefresh, openGlobalSearch, recentRepositories, session, workspaceSessions],
+    [activeView, currentSavedView, data?.repository, isDemo, manageSavedViews, navigateToView, onActivateRepository, onCloseRepository, onOpen, onOpenRecent, onQuickOpenFile, onRefresh, openGlobalSearch, openSavedView, recentRepositories, saveCurrentView, session, workspaceSessions],
   );
   const commandList = useMemo(
     () => createCommandRegistry([
       ...createNavigationCommands(),
+      ...createSavedViewCommands(savedViewsState.savedViews),
       ...createRepositoryCommands(commandContext),
       ...createFileCommands(),
       ...createSearchCommands(),
@@ -206,14 +397,17 @@ export function AppShell({
     () => data?.status.files.filter((file) => file.kind === "conflict").length ?? 0,
     [data],
   );
+  const pinnedSavedViews = useMemo(
+    () => savedViewsState.savedViews.filter((view) => view.pinned),
+    [savedViewsState.savedViews],
+  );
 
   const handleHealthNavigation = useCallback(
     (view, payload = {}) => {
       if (!view) return;
-      if (onRequestNavigation) onRequestNavigation(view, payload, selectedSessionId);
-      else onNavigate(view);
+      requestNavigationToView(view, payload);
     },
-    [onNavigate, onRequestNavigation, selectedSessionId],
+    [requestNavigationToView],
   );
 
   return (
@@ -271,7 +465,7 @@ export function AppShell({
                   key={item.id}
                   type="button"
                   disabled={!data}
-                  onClick={() => onNavigate(item.id)}
+                  onClick={() => navigateToView(item.id)}
                   className={cn(
                     "flex h-9 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors disabled:opacity-40",
                     activeView === item.id && data
@@ -285,6 +479,39 @@ export function AppShell({
                 </button>
               );
             })}
+            {data && (
+              <div className="mt-4 border-t border-border/70 pt-3">
+                <div className="mb-1 flex items-center justify-between px-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <span>Saved Views</span>
+                  <button type="button" className="text-[10px] normal-case tracking-normal text-primary hover:underline" onClick={manageSavedViews}>
+                    Manage
+                  </button>
+                </div>
+                {pinnedSavedViews.length === 0 ? (
+                  <button
+                    type="button"
+                    className="flex h-8 w-full items-center gap-2 rounded-lg px-3 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                    onClick={manageSavedViews}
+                  >
+                    <Bookmark className="size-3.5" />
+                    No pinned views
+                  </button>
+                ) : (
+                  pinnedSavedViews.map((view) => (
+                    <button
+                      key={view.id}
+                      type="button"
+                      className="flex h-8 w-full items-center gap-2 rounded-lg px-3 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                      onClick={() => openSavedView(view)}
+                      title={view.name}
+                    >
+                      <Bookmark className="size-3.5 shrink-0 text-primary" />
+                      <span className="truncate">{view.name}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </nav>
 
           <div className="border-t border-border p-3">
@@ -389,36 +616,61 @@ export function AppShell({
                   id={`repository-panel-${loadedSession.id}`}
                   role="tabpanel"
                   aria-labelledby={`repository-tab-${loadedSession.id}`}
-                  className={cn("h-full", loadedSession.id !== selectedSessionId && "hidden")}
+                  className={cn("flex h-full min-h-0 flex-col", loadedSession.id !== selectedSessionId && "hidden")}
                 >
-                  <ViewHost
-                    view={loadedSession.activeView}
-                    data={loadedSession.snapshot}
-                    revision={loadedSession.snapshot.scannedAt}
-                    graphRequest={loadedSession.ui.graphRequest}
-                    compareInit={loadedSession.ui.compareInit}
-                    fileHistory={loadedSession.ui.fileHistory}
-                    fileFilterRequest={loadedSession.ui.fileFilterRequest}
-                    fileSelectionRequest={loadedSession.ui.fileSelectionRequest}
-                    navigationRequest={loadedSession.ui.navigationRequest}
-                    operationMode={operationMode}
-                    isDemo={isDemo}
-                    operationError={loadedSession.ui.workspaceOperationError}
-                    onSetOperationMode={onSetOperationMode}
-                    onWorkspaceOperation={(operation, paths) => onWorkspaceOperation?.(loadedSession.id, operation, paths)}
-                    onRefresh={onRefresh}
-                    onCompare={onCompare}
-                    onNavigate={onNavigate}
-                    onCherryPick={onCherryPick}
-                    onShowBranchInGraph={onShowBranchInGraph}
-                    onFocusCommit={onFocusCommit}
-                    onShowWorkspace={onShowWorkspace}
-                    onFileHistoryChange={(value) => onFileHistoryChange?.(loadedSession.id, value)}
-                    onOpenFileHistory={(path) => onOpenFileHistory?.(loadedSession.id, path)}
-                    onOpenFileAtRevision={(revision, path) => onOpenFileAtRevision?.(revision, path, loadedSession.id)}
-                    onOpenPreviousRevision={(revision, path) => onOpenPreviousRevision?.(revision, path, loadedSession.id)}
-                    onHealthNavigate={handleHealthNavigation}
+                  <SavedViewToolbar
+                    currentView={loadedSession.id === selectedSessionId ? currentSavedView : null}
+                    activeSavedView={loadedSession.id === selectedSessionId ? activeSavedView : null}
+                    modified={loadedSession.id === selectedSessionId && savedViewModified}
+                    onSave={saveCurrentView}
+                    onSaveAs={saveAsNew}
+                    onRevert={revertSavedView}
+                    disabled={savedViewBusy}
                   />
+                  {savedViewActionError && loadedSession.id === selectedSessionId && (
+                    <div role="alert" className="border-b border-amber-500/25 bg-amber-500/10 px-5 py-2 text-xs text-amber-400">{savedViewActionError}</div>
+                  )}
+                  <div className="min-h-0 flex-1">
+                    <ViewHost
+                      view={loadedSession.activeView}
+                      data={loadedSession.snapshot}
+                      revision={loadedSession.snapshot.scannedAt}
+                      graphRequest={loadedSession.ui.graphRequest}
+                      compareInit={loadedSession.ui.compareInit}
+                      fileHistory={loadedSession.ui.fileHistory}
+                      fileFilterRequest={loadedSession.ui.fileFilterRequest}
+                      fileSelectionRequest={loadedSession.ui.fileSelectionRequest}
+                      navigationRequest={loadedSession.ui.navigationRequest}
+                      savedViews={savedViewsState.savedViews}
+                      savedViewsLoading={savedViewsState.loading}
+                      savedViewsError={savedViewsState.error}
+                      savedViewsWarning={savedViewsState.warning}
+                      operationMode={operationMode}
+                      isDemo={isDemo}
+                      operationError={loadedSession.ui.workspaceOperationError}
+                      onSetOperationMode={onSetOperationMode}
+                      onWorkspaceOperation={(operation, paths) => onWorkspaceOperation?.(loadedSession.id, operation, paths)}
+                      onRefresh={onRefresh}
+                      onCompare={onCompare}
+                      onNavigate={navigateToView}
+                      onCherryPick={onCherryPick}
+                      onShowBranchInGraph={onShowBranchInGraph}
+                      onFocusCommit={onFocusCommit}
+                      onShowWorkspace={onShowWorkspace}
+                      onFileHistoryChange={(value) => onFileHistoryChange?.(loadedSession.id, value)}
+                      onOpenFileHistory={(path) => onOpenFileHistory?.(loadedSession.id, path)}
+                      onOpenFileAtRevision={(revision, path) => onOpenFileAtRevision?.(revision, path, loadedSession.id)}
+                      onOpenPreviousRevision={(revision, path) => onOpenPreviousRevision?.(revision, path, loadedSession.id)}
+                      onHealthNavigate={handleHealthNavigation}
+                      onReloadSavedViews={savedViewsState.reload}
+                      onOpenSavedView={openSavedView}
+                      onRenameSavedView={renameSavedView}
+                      onDuplicateSavedView={duplicateSavedView}
+                      onToggleSavedViewPin={toggleSavedViewPin}
+                      onDeleteSavedView={deleteSavedView}
+                      onCreateSavedView={() => openSaveDialog("create")}
+                    />
+                  </div>
                 </div>
               ))
             )}
@@ -459,10 +711,25 @@ export function AppShell({
       <GlobalSearch
         open={globalSearchOpen}
         onOpenChange={setGlobalSearchOpen}
+        initialQuery={globalSearchInitialQuery}
         repositoryPath={data?.repository.rootPath}
         revision={data ? { head: data.repository.head, scannedAt: data.scannedAt } : null}
         onOpenResult={openSearchResult}
       />
+      {savedViewDialog && (
+        <SaveViewDialog
+          open
+          mode={savedViewDialog.mode}
+          viewType={currentSavedView?.viewType ?? savedViewDialog.target?.viewType}
+          initialName={savedViewDialog.mode === "rename" ? savedViewDialog.target?.name ?? "" : savedViewDialog.mode === "saveAs" ? `${savedViewDialog.target?.name ?? getSavedViewTypeLabel(currentSavedView?.viewType)} copy` : ""}
+          initialPinned={savedViewDialog.target?.pinned ?? false}
+          pending={savedViewBusy}
+          onOpenChange={(open) => {
+            if (!open && !savedViewBusy) setSavedViewDialog(null);
+          }}
+          onSubmit={handleSavedViewDialogSubmit}
+        />
+      )}
     </TooltipProvider>
   );
 }
@@ -483,6 +750,10 @@ function ViewHost({
   fileFilterRequest,
   fileSelectionRequest,
   navigationRequest,
+  savedViews,
+  savedViewsLoading,
+  savedViewsError,
+  savedViewsWarning,
   operationMode,
   isDemo,
   operationError,
@@ -494,7 +765,23 @@ function ViewHost({
   onOpenFileAtRevision,
   onOpenPreviousRevision,
   onHealthNavigate,
+  onReloadSavedViews,
+  onOpenSavedView,
+  onRenameSavedView,
+  onDuplicateSavedView,
+  onToggleSavedViewPin,
+  onDeleteSavedView,
+  onCreateSavedView,
 }) {
+  const effectiveGraphRequest = navigationRequest?.view === "commits"
+    ? { ...navigationRequest.payload, query: navigationRequest.payload?.search ?? navigationRequest.payload?.query, nonce: navigationRequest.nonce }
+    : graphRequest;
+  const branchFilter = navigationRequest?.view === "branches"
+    ? navigationRequest.payload?.filter ?? navigationRequest.payload?.status?.[0] ?? null
+    : null;
+  const hotspotFilter = navigationRequest?.view === "hotspots"
+    ? navigationRequest.payload?.filter ?? null
+    : null;
   // Commits and Compare stay mounted so their state (filters, selection,
   // loaded pages) survives navigation.
   return (
@@ -502,7 +789,7 @@ function ViewHost({
       <div className={cn("h-full", view !== "commits" && "hidden")}>
         <CommitGraph
           data={data}
-          graphRequest={graphRequest}
+          graphRequest={effectiveGraphRequest}
           onCompare={onCompare}
           onCherryPick={onCherryPick}
           onShowWorkspace={onShowWorkspace}
@@ -521,7 +808,8 @@ function ViewHost({
           onShowInGraph={onShowBranchInGraph}
           onCompareWithDefault={onCompare}
           onCompareWithCurrent={(branch) => onCompare(data.repository.currentBranch, branch)}
-          initialFilter={navigationRequest?.view === "branches" ? navigationRequest.payload?.filter : null}
+          initialFilter={branchFilter}
+          initialConfig={navigationRequest?.view === "branches" ? navigationRequest.payload : null}
         />
       )}
       {view === "worktrees" && <WorktreesView worktrees={data.worktrees} />}
@@ -544,6 +832,7 @@ function ViewHost({
           status={data.status}
           historyState={fileHistory}
           focusFilterRequest={fileFilterRequest}
+          initialConfig={navigationRequest?.view === "files" ? navigationRequest.payload : null}
           fileSelectionRequest={fileSelectionRequest}
           onHistoryStateChange={onFileHistoryChange}
           onOpenCommit={onFocusCommit}
@@ -551,8 +840,8 @@ function ViewHost({
           onOpenPreviousRevision={onOpenPreviousRevision}
         />
       )}
-      {view === "hotspots" && <HotspotsView repoPath={data.repository.rootPath} onOpenFileHistory={onOpenFileHistory} initialFilter={navigationRequest?.view === "hotspots" ? navigationRequest.payload?.filter : null} />}
-      {view === "ownership" && <OwnershipView repoPath={data.repository.rootPath} />}
+      {view === "hotspots" && <HotspotsView repoPath={data.repository.rootPath} onOpenFileHistory={onOpenFileHistory} initialFilter={hotspotFilter} initialConfig={navigationRequest?.view === "hotspots" ? navigationRequest.payload : null} />}
+      {view === "ownership" && <OwnershipView repoPath={data.repository.rootPath} initialConfig={navigationRequest?.view === "ownership" ? navigationRequest.payload : null} />}
       {view === "health" && <HealthView repoPath={data.repository.rootPath} revision={data.scannedAt} onNavigate={onHealthNavigate} />}
       {view === "reflog" && (
         <ReflogView
@@ -561,11 +850,31 @@ function ViewHost({
           currentBranch={data.repository.currentBranch}
           branches={data.branches}
           revision={revision}
+          initialConfig={navigationRequest?.view === "reflog" ? navigationRequest.payload : null}
           onViewCommit={onFocusCommit}
           onCompare={onCompare}
         />
       )}
       {view === "refs" && <RefsView data={data} />}
+      {view === "saved-views" && (
+        <SavedViewsView
+          savedViews={savedViews}
+          loading={savedViewsLoading}
+          error={savedViewsError}
+          warning={savedViewsWarning}
+          data={data}
+          onReload={onReloadSavedViews}
+          onOpen={onOpenSavedView}
+          onRename={onRenameSavedView}
+          onDuplicate={onDuplicateSavedView}
+          onTogglePin={onToggleSavedViewPin}
+          onDelete={onDeleteSavedView}
+          onCreate={onCreateSavedView}
+          canCreate={Boolean(currentSavedView)}
+        />
+      )}
+      {view === "activity" && <SavedViewNotice title="Activity view is not available yet" />}
+      {view === "search" && <SavedViewNotice title="Search views open in the repository search dialog" />}
     </>
   );
 }

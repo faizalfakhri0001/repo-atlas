@@ -25,7 +25,7 @@ function emptyGrouped() {
   return groupSearchResults([]);
 }
 
-export function useGlobalSearch({ repositoryPath, revision, open = false } = {}) {
+export function useGlobalSearch({ repositoryPath, revision, open = false, initialQuery = "" } = {}) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -48,6 +48,13 @@ export function useGlobalSearch({ repositoryPath, revision, open = false } = {})
     setState({ loading: false, error: null, errors: [], grouped: emptyGrouped(), durationMs: null });
     return undefined;
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !initialQuery) return;
+    setQuery(initialQuery);
+    setCategory("all");
+    setSelectedIndex(0);
+  }, [initialQuery, open]);
 
   const performSearch = useCallback(
     async (nextQuery, nextCategory, requestId) => {

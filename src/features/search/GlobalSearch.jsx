@@ -76,11 +76,12 @@ function SearchResult({ result, index, selected, onSelect, onOpen }) {
 export function GlobalSearch({
   open,
   onOpenChange,
+  initialQuery = "",
   repositoryPath,
   revision,
   onOpenResult,
 }) {
-  const search = useGlobalSearch({ repositoryPath, revision, open });
+  const search = useGlobalSearch({ repositoryPath, revision, open, initialQuery });
   const itemRefs = useRef(new Map());
 
   useEffect(() => {

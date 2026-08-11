@@ -219,9 +219,14 @@ export function CommitGraph({ data, onCompare, onCherryPick, onShowWorkspace, gr
   // External requests (e.g. "show branch in graph", "focus commit").
   useEffect(() => {
     if (!graphRequest) return;
+    const requestedOrder = graphRequest.order === "date" || graphRequest.order === "topo" ? graphRequest.order : null;
+    if (requestedOrder && requestedOrder !== order) {
+      setOrder(requestedOrder);
+      fetchList({ refs: graphRequest.refs, nextOrder: requestedOrder });
+    }
     if (graphRequest.refs !== undefined) {
       setRefFilter(graphRequest.refs);
-      fetchList({ refs: graphRequest.refs });
+      if (!requestedOrder) fetchList({ refs: graphRequest.refs });
     }
     if (graphRequest.query !== undefined) setQuery(graphRequest.query ?? "");
     if (graphRequest.focusHash) setPendingFocus(graphRequest.focusHash);

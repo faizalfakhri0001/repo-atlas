@@ -87,13 +87,13 @@ function HotspotDetail({ file, onOpenFileHistory }) {
   );
 }
 
-export function HotspotsView({ repoPath, onOpenFileHistory, initialFilter = null }) {
+export function HotspotsView({ repoPath, onOpenFileHistory, initialFilter = null, initialConfig = null }) {
   const [state, setState] = useState({ loading: true, error: null, data: null });
-  const [includeGenerated, setIncludeGenerated] = useState(false);
-  const [pathPrefixDraft, setPathPrefixDraft] = useState("");
-  const [pathPrefix, setPathPrefix] = useState("");
+  const [includeGenerated, setIncludeGenerated] = useState(() => Boolean(initialConfig?.includeGenerated));
+  const [pathPrefixDraft, setPathPrefixDraft] = useState(() => initialConfig?.pathPrefix ?? "");
+  const [pathPrefix, setPathPrefix] = useState(() => initialConfig?.pathPrefix ?? "");
   const [query, setQuery] = useState("");
-  const [extension, setExtension] = useState("all");
+  const [extension, setExtension] = useState(() => initialConfig?.extension ?? "all");
   const [concentrationOnly, setConcentrationOnly] = useState(initialFilter === "concentrated");
   const [selectedPath, setSelectedPath] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -101,6 +101,14 @@ export function HotspotsView({ repoPath, onOpenFileHistory, initialFilter = null
   useEffect(() => {
     setConcentrationOnly(initialFilter === "concentrated");
   }, [initialFilter]);
+
+  useEffect(() => {
+    if (!initialConfig) return;
+    setIncludeGenerated(Boolean(initialConfig.includeGenerated));
+    setPathPrefixDraft(initialConfig.pathPrefix ?? "");
+    setPathPrefix(initialConfig.pathPrefix ?? "");
+    setExtension(initialConfig.extension ?? "all");
+  }, [initialConfig]);
 
   useEffect(() => {
     let cancelled = false;

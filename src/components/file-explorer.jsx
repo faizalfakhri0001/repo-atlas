@@ -45,6 +45,7 @@ export function FileExplorer({
   historyState,
   onHistoryStateChange,
   focusFilterRequest = null,
+  initialConfig = null,
   fileSelectionRequest = null,
   onOpenCommit,
   onOpenFileAtRevision,
@@ -57,7 +58,7 @@ export function FileExplorer({
   const [fileMode, setFileMode] = useState("preview");
   const [selectedRevision, setSelectedRevision] = useState(null);
   const [scrollTop, setScrollTop] = useState(0);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => initialConfig?.filter ?? initialConfig?.pathPrefix ?? "");
   const filterRef = useRef(null);
   const rowRefs = useRef(new Map());
   const handledSelectionRef = useRef(null);
@@ -108,6 +109,11 @@ export function FileExplorer({
       cancelled = true;
     };
   }, [repoPath]);
+
+  useEffect(() => {
+    if (!initialConfig) return;
+    setQuery(initialConfig.filter ?? initialConfig.pathPrefix ?? "");
+  }, [initialConfig]);
 
   const indexedFiles = useMemo(() => mergeWorkingTreeStatuses(state.files, status?.files), [state.files, status?.files]);
   const filteredFiles = useMemo(() => filterFileEntries(indexedFiles, query), [indexedFiles, query]);

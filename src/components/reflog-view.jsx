@@ -80,14 +80,15 @@ export function ReflogView({
   currentBranch,
   branches = [],
   revision,
+  initialConfig = null,
   now,
   bookmarkedHashes,
   onViewCommit,
   onCompare,
 }) {
-  const [ref, setRef] = useState("HEAD");
-  const [action, setAction] = useState("all");
-  const [query, setQuery] = useState("");
+  const [ref, setRef] = useState(() => initialConfig?.ref || "HEAD");
+  const [action, setAction] = useState(() => initialConfig?.actions?.length === 1 ? initialConfig.actions[0] : "all");
+  const [query, setQuery] = useState(() => initialConfig?.search || "");
   const [state, setState] = useState({ entries: [], hasMore: false, nextSkip: null, loading: true, loadingMore: false, error: null });
   const [selectedKey, setSelectedKey] = useState(null);
   const [reachability, setReachability] = useState(new Map());
@@ -96,6 +97,14 @@ export function ReflogView({
   const requestIdRef = useRef(0);
   const branchOptions = useMemo(() => getLocalBranchOptions(branches, currentBranch), [branches, currentBranch]);
   const bookmarks = useMemo(() => normalizeBookmarkedHashes(bookmarkedHashes), [bookmarkedHashes]);
+
+  useEffect(() => {
+    if (!initialConfig) return;
+    setRef(initialConfig.ref || "HEAD");
+    setAction(initialConfig.actions?.length === 1 ? initialConfig.actions[0] : "all");
+    setQuery(initialConfig.search || "");
+    setSelectedKey(null);
+  }, [initialConfig]);
 
   useEffect(() => {
     if (ref !== "HEAD" && !branchOptions.includes(ref)) setRef("HEAD");

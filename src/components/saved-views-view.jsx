@@ -113,8 +113,8 @@ export function SavedViewToolbar({ currentView, activeSavedView, modified, onSav
       </span>
       <Badge variant="muted">{getSavedViewTypeLabel(currentView.viewType)}</Badge>
       <span className="flex-1" />
-      <Button variant="outline" size="sm" onClick={onSave} disabled={disabled || !activeSavedView || !modified}>
-        <Save /> Save Changes
+      <Button variant="outline" size="sm" onClick={onSave} disabled={disabled || (Boolean(activeSavedView) && !modified)}>
+        <Save /> {activeSavedView ? "Save Changes" : "Save View"}
       </Button>
       <Button variant="outline" size="sm" onClick={onSaveAs} disabled={disabled}>
         <Plus /> Save As New
@@ -179,6 +179,7 @@ export function SavedViewsView({
   onTogglePin,
   onDelete,
   onCreate,
+  canCreate = true,
 }) {
   const missingById = useMemo(
     () => new Map(savedViews.map((view) => [view.id, getMissingSavedViewReferences(view, data)])),
@@ -200,7 +201,7 @@ export function SavedViewsView({
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={onReload} disabled={loading}><LoaderCircle className={cn("size-3.5", loading && "animate-spin")} /> Refresh</Button>
-          <Button size="sm" onClick={onCreate}><Plus /> New Saved View</Button>
+          <Button size="sm" onClick={onCreate} disabled={!canCreate} title={!canCreate ? "Open a filterable view to create a saved view" : undefined}><Plus /> New Saved View</Button>
         </div>
       </div>
       {warning && <div className="border-b border-amber-500/25 bg-amber-500/10 px-5 py-2 text-xs text-amber-400">{warning}</div>}
@@ -233,3 +234,14 @@ export function SavedViewsView({
   );
 }
 
+export function SavedViewNotice({ title, description = "This saved configuration is retained and can be opened when its view is available." }) {
+  return (
+    <div className="flex h-full items-center justify-center p-8">
+      <div className="max-w-md rounded-xl border border-border bg-card/60 p-6 text-center">
+        <Bookmark className="mx-auto size-8 text-primary" />
+        <h1 className="mt-3 text-base font-semibold">{title}</h1>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  );
+}
